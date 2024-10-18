@@ -208,24 +208,25 @@ recently that sometimes caches are specific to processes, and so perhaps all
 this forking is slowing things down in more ways than one.
 
 My solution was to implement a quick-and-dirty function that would replace a
-`fork()` -> `exec()` call pair by simply comparing the contents of two files,
-and if at any point it found a difference, exiting and returning a status that
-indicates that the two files are different. My first-draft of this function
-yielded no significant performance gain which surprised me given that there
-should be substantially less overhead - no forking, no commandline argument or
-flag parsing, none of the extra functionality a more complete program like
-`cmp` might have. My first-draft file-comparison function worked by reading a
-set number of bytes from both files, and then looping through those bytes 1 by
-1 and if the byte from one file mismatched the corresponding byte from the
-other file, it exited early. After some quick research, I found that using
-`memcmp()` to compare two sets of bytes was possibly faster. I gave it a go and
-found my program was *substantially* faster. It turns out that on a lot of
-architectures, `memcmp()` has an implementation written efficiently in
-assembly. For example, it could be vectorized for your processor architecture,
-giving it huge speed gains over whatever the compiler was able to do to my
-C/C++ code for comparing bytes. At the time of writing, this switch from
-manually checking each byte to using `memcmp()` represents the biggest speed
-improvement I've found so far.
+`fork()` -> `exec("cmp [first_directory]/[unique_file_path[i]]
+[second_directory]/[unique_file_path[i]]")` call pair by simply comparing the
+contents of two files, and if at any point it found a difference, exiting and
+returning a status that indicates that the two files are different. My
+first-draft of this function yielded no significant performance gain which
+surprised me given that there should be substantially less overhead - no
+forking, no commandline argument or flag parsing, none of the extra
+functionality a more complete program like `cmp` might have. My first-draft
+file-comparison function worked by reading a set number of bytes from both
+files, and then looping through those bytes 1 by 1 and if the byte from one
+file mismatched the corresponding byte from the other file, it exited early.
+After some quick research, I found that using `memcmp()` to compare two sets of
+bytes was possibly faster. I gave it a go and found my program was
+*substantially* faster. It turns out that on a lot of architectures, `memcmp()`
+has an implementation written efficiently in assembly. For example, it could be
+vectorized for your processor architecture, giving it huge speed gains over
+whatever the compiler was able to do to my C/C++ code for comparing bytes. At
+the time of writing, this switch from manually checking each byte to using
+`memcmp()` represents the biggest speed improvement I've found so far.
 
 Before making the switch from manually comparing bytes to using `memcmp()`, I
 also tried multithreading the C implementation to see if that would help. It
@@ -240,15 +241,16 @@ the flat cost of dividing the work and passing it onto threads, (2) the fact
 that on a busy CPU, it may be unlikely that any two threads are both working at
 the same time, and (3) that there may also be more cache misses because
 multiple threads are making non-adjacent, perhaps even distant data accesses.
-Worse still, the multithreaded C implementation (running on my idle laptop) was
-**still** multiple factors slower than `diff -qr`! Using `memcmp()` represented
-a solution that simply made better use of the underlying hardware. If
-vectorized, the code will make use of hardware capability that was just
-underutilized in other implementations. There were no considerations to take
-into account like with the multithreaded version. On a busy CPU or an idle CPU,
-using `memcmp()` represented significant and straight forward performance
-gains. And better still, if it made sense to do so, the benefits of using
-`memcmp()` could also be multiplied by multithreading the program.
+Worse still, the multithreaded, non-`memcmp()` C implementation (running on my
+idle laptop) was **still** multiple factors slower than `diff -qr`! Using
+`memcmp()` represented a solution that simply made better use of the underlying
+hardware. If the implementation of `memcmp()` was vectorized, the code would
+make use of hardware capability that was just underutilized in other
+implementations. Unlike with the multithreaded version of `cmp-tree`, with
+`memcmp()` there were no considerations to take into account - on a busy CPU or
+an idle CPU, using `memcmp()` represented significant and straight forward
+performance gains. To top it all off, if it made sense to do so, the benefits
+of using `memcmp()` could also be multiplied by multithreading the program.
 
 At this point, I had C and C++ implementations that were around as fast if not
 faster than `diff -qr`, so what's with the Rust version? Well at the time I was
