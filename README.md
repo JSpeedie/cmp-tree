@@ -165,10 +165,10 @@ The C implementation took me easily 4-6 times as long as it took me to write
 the C++ implementation. This was mostly because I wrote my own implementations
 of: (1) a C++ vector I called `DynamicArray`, (2) a C++ string I called
 `String`, (3) basic functions that would allow me to work with my `String`s as
-if they were paths, and (4) a hand implementation of merge sort that worked on
-`DynamicArray`. This was a great learning opportunity in many ways. I got to
-experience first hand some of the frustrations with C that might've motivated
-C++ such as:
+if they were paths, and (4) a hand-written implementation of merge sort that
+worked on `DynamicArray`. This was a great learning opportunity in many ways. I
+got to experience first hand some of the frustrations with C that might've
+motivated C++ such as:
 
 1. Having to hand-write implementations for things most programmers feel
    (perhaps rightfully so) entitled to such as vectors/dynamic arrays, and
@@ -202,13 +202,20 @@ contain only unique entries and then `fork()` -> `exec()` a `cmp` command on
 `[second_directory]/[unique_file_path[i]]`. Remembering this, I thought that it
 was possible that calling `fork()` so many times could be a big part of
 problem. After all, it's not free to just duplicate a process. Before making
-any changes though, I also used `perf` to profile the C implementation and I
-found that it was getting a lot of L2 and L3 cache misses. I remembered hearing
-recently that sometimes caches are specific to processes, and so perhaps all
-this forking is slowing things down in more ways than one.
+any changes though, I decided to use `perf` to profile the C implementation.  I
+found that the C implementation was getting a lot of L2 and L3 cache misses,
+and this seemed like an obvious bottleneck. I remembered hearing recently that
+sometimes caches are specific to processes, and if this was indeed the case
+then there would be no caching benefit if one process cached memory that
+another process also wanted to read. In short, forking so many times during
+execution could be slowing down the program in two ways: (1) because forking
+itself requires processing time and (2) the many forked processes may not
+benefit from the caching of their siblings processes, preventing the program
+from benefitting (as much as this program can) from caching.
 
-My solution was to implement a quick-and-dirty function that would replace a
-`fork()` -> `exec("cmp [first_directory]/[unique_file_path[i]]
+My solution was to eliminate all forking by implementing a quick-and-dirty
+function that would replace a `fork()` -> `exec("cmp
+[first_directory]/[unique_file_path[i]]
 [second_directory]/[unique_file_path[i]]")` call pair by simply comparing the
 contents of two files, and if at any point it found a difference, exiting and
 returning a status that indicates that the two files are different. My
@@ -253,16 +260,79 @@ performance gains. To top it all off, if it made sense to do so, the benefits
 of using `memcmp()` could also be multiplied by multithreading the program.
 
 At this point, I had C and C++ implementations that were around as fast if not
-faster than `diff -qr`, so what's with the Rust version? Well at the time I was
-very new to Rust and I thought this could be a good introductory project. I
-also wanted to see how the performance would compare between Rust and C/C++.
-The code came together quickly in Rust and when it came to performance testing,
-the Rust version was on par with C and C++ (even though the C version as
-multithreaded!). I had a great time writing the code in Rust. To me, it seemed
-like there were lots of smart decisions that had been made with the structs I
-was using or with the language more generally, and the development went very
-smoothly.
+faster than `diff -qr`, so what's with the Rust version? I had 3 motiations for
+making a Rust implementation of `cmp-tree`. First, at the time I was very new
+to Rust and I thought this could be a good project for helping me familiarize
+myself with what it was like to write code in Rust. For example, this project
+represented my first chance to work with files and paths in Rust, as well as
+serving as my first meaningful attempt to work with Rust's basic data
+structures like `String`s and `Vec`s. The second motivation was that this
+modestly-sized project would allow me to get a sense of what the working
+environment for Rust would be like. What does compilation look like? How is it
+creating documentation? How is it adding tests to your code? Of course I could
+learn about this on a project of almost any size, but this simple command line
+utility felt like a project that would require an appropriate level of
+commitment. My final motivation for making a Rust implementation of `cmp-tree`
+was to see how Rust compared to C++ and C in terms of performance. Would all
+the memory safety come at the cost of slightly worse performance? Would the
+promise of many zero-cost abstractions hold true? I wanted to see for myself.
 
-I currently have plans to multithread the Rust version both so I can try
-multithreading in Rust for the first time and so I can make a faster program
-since I do intend to use `cmp-tree` on two ginormous directory trees.
+Having implemented the same core functionality of the idea behind `cmp-tree`, I
+can now share my thoughts about those 3 motivations. When it came to writing
+the Rust implementation of `cmp-tree`, I found that I was able to get a working
+implementation done quite quickly in Rust, given my lack of familiarity.
+Working with files, paths, `String`s and `Vec`s is very comfortable in Rust and
+I can honestly say that I preferred writing the code in Rust to writing it in
+C++ and that I definitely preferred writing the code in Rust to writing it in
+C! Okay, to be fair, I have such a strong preference for Rust in this case over
+C mostly because in Rust I didn't have to write a decent string and dynamic
+array myself (which for a project of this size, represents a significant
+portion of the total time spent developing) nor did I have to spend time
+debugging those implementations (which took even longer than writing them!). I
+also really liked Rust's working environment. Compilation is a breeze because I
+don't have to write a Makefile or fiddle with CMake. Compilation is completely
+handled by `cargo` which figures out what it needs to do from the Cargo.toml,
+and the pub, use, etc. keywords. Lastly, when it came to performance testing,
+the Rust version was on par with C and C++ (even though the C version as
+multithreaded!). In summary, I had a great time writing the code in Rust. To
+me, it seemed like there were lots of smart decisions that had been made with
+the data structures I was using or with the language more generally, and the
+development went very smoothly. This project was perhaps the final experience I
+needed to push me over the edge: I think for future programming I will use Rust
+rather than C++ or C, provided there are no strong reasons not (such as
+available C/C++ libraries or existing C/C++ codebases). I really enjoy writing
+Rust, I really enjoy the working environment of Rust, and it is (from my very
+few personal experiences with it) just as performant if not more so than C/C++.
+
+&nbsp;
+
+### Next Steps
+
+I currently have a few plans for this repo. I have other things going on in my
+life that are more important (including my job!) so whether or not I will get
+around to all or even some of these remains to be seen, but I'll lay them out
+here nonetheless.
+
+1. Write a Python implementation of `cmp-tree`
+    * I saw some methods in some Python libraries I used that would've made
+      writing `cmp-tree` much simpler than it was in any of the languages I
+      have written the program in so far, except for Bash. I am thinking that
+      in the future, outside of the most basic of scripts, I would like to use
+      Python for scripting instead of Bash. Bash is just a mess, and while I'm
+      not a big Python fan, it has infinitely better support for arrays among
+      many, many other advantages! I am also curious to see how a similar
+      implementation would perform in Python. Given that my original Bash
+      implementation was around as fast as my first `fork()` -> `exec(cmp)`
+      implementation, maybe the Python performance won't be that far from the
+      Rust implementation.
+2. Make the Rust implementation multithreaded
+    * I think the next thing for me to do in Rust (in general) is
+      multithreading. Personally, I think multithreading might make the utility
+      worse (since I think it will be less efficient in terms of actual CPU
+      time) but I think when learning systems-level languages, you need to know
+      how to multithread in the language you're learning, and as such I need to
+      give it a go at some point. I also recognize that a multithreaded option,
+      while perhaps slower when measured in total CPU time, would, on a normal,
+      single-user computer, run faster in real-world time, and giving users the
+      choice between a multithreaded execution and a single-threaded execution
+      might be a good idea.
