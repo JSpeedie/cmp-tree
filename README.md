@@ -278,31 +278,32 @@ the memory safety come at the cost of slightly worse performance? Would the
 promise of many zero-cost abstractions hold true? I wanted to see for myself.
 
 Having implemented the same core functionality of the idea behind `cmp-tree`, I
-can now share my thoughts about those 3 motivations. When it came to writing
-the Rust implementation of `cmp-tree`, I found that I was able to get a working
-implementation done quite quickly in Rust, given my lack of familiarity.
-Working with files, paths, `String`s and `Vec`s is very comfortable in Rust and
-I can honestly say that I preferred writing the code in Rust to writing it in
-C++ and that I definitely preferred writing the code in Rust to writing it in
-C! Okay, to be fair, I have such a strong preference for Rust in this case over
-C mostly because in Rust I didn't have to write a decent string and dynamic
-array myself (which for a project of this size, represents a significant
-portion of the total time spent developing) nor did I have to spend time
-debugging those implementations (which took even longer than writing them!). I
-also really liked Rust's working environment. Compilation is a breeze because I
-don't have to write a Makefile or fiddle with CMake. Compilation is completely
-handled by `cargo` which figures out what it needs to do from the Cargo.toml,
-and the pub, use, etc. keywords. Lastly, when it came to performance testing,
-the Rust version was on par with C and C++ (even though the C version as
-multithreaded!). In summary, I had a great time writing the code in Rust. To
-me, it seemed like there were lots of smart decisions that had been made with
-the data structures I was using or with the language more generally, and the
-development went very smoothly. This project was perhaps the final experience I
-needed to push me over the edge: I think for future programming I will use Rust
-rather than C++ or C, provided there are no strong reasons not (such as
-available C/C++ libraries or existing C/C++ codebases). I really enjoy writing
-Rust, I really enjoy the working environment of Rust, and it is (from my very
-few personal experiences with it) just as performant if not more so than C/C++.
+can now share my thoughts about Rust with respect to those 3 initial
+motivations. When it came to writing the Rust implementation of `cmp-tree`, one
+major (and surprising) takeaway I had was how quickly I was able to get a
+working implementation done in Rust, given my lack of familiarity. Even though
+it was my first real project working with files, paths, `String`s and `Vec`s, I
+found all of the aforementioned to be very comfortable to work with. I can
+honestly say that I preferred writing the code in Rust to writing it in C++,
+and that I can definitely say that I preferred writing the code in Rust to
+writing it in C! I also really liked Rust's working environment. Compilation is
+a breeze because I don't have to write a Makefile or fiddle with CMake.
+Compilation is completely handled by `cargo` which figures out what it needs to
+do from the Cargo.toml, and the pub, use, etc. keywords. Lastly, when it came
+to performance testing, the Rust version was on par with C and C++ (even though
+at the time the C version was multithreaded while the Rust version was not!).
+In summary, I had a great time writing the code in Rust. To me, it seemed like
+there were lots of smart decisions that had been made with the data structures
+I was using and with the language more generally, and the development went very
+smoothly. Ultimately, that is how I remember that period of time when I first
+wrote the C, C++ and Rust implementations: the Rust implementation went the
+smoothest and was the most enjoyable. This project was perhaps the final
+experience I needed to push me over the edge: I think for future programming I
+will prefer to use Rust rather than C++ or C, provided there are no strong reasons not to
+(such as available C/C++ libraries or existing C/C++ codebases). I really enjoy
+writing Rust, I really enjoy the working environment of Rust, and it is (from
+my very few personal experiences with it) just as performant if not more so
+than C/C++.
 
 &nbsp;
 
@@ -336,3 +337,21 @@ here nonetheless.
       single-user computer, run faster in real-world time, and giving users the
       choice between a multithreaded execution and a single-threaded execution
       might be a good idea.
+3. Talk about the perfomance of `cmp-tree` versus alternatives in the Project
+   Report
+    * While this project served (and continues to serve) mostly as a learning
+      opportunity for me, I also very well might not have done quite as much
+      work if I was unable to write a tool that performed the task faster than
+      `diff -qr`. In the project report, I mention how I use `diff -qr` as a
+      sort of goal, and when my implementations were 3 times slower than `diff
+      -qr`, I knew there was some optimizing to be done. However, since I wrote
+      my own file comparison function that uses `memcmp()` (or some
+      equivalent), my program has been faster than `diff -qr` by a modest
+      margin. 
+4. Add support for files of all formats in Rust version
+    * Currently the Rust implementation (and all the other implementations for
+      that sake) only support directory trees comprised solely of directories
+      and normal files. Pipes, links, and other forms of files that appear on
+      Linux (the only OS I intend for this project to support) have no support
+      yet. This, and the lack of a substantial testing suite are what prevent
+      me from using `cmp-tree` for important tasks.
