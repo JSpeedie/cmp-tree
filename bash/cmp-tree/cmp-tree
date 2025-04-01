@@ -11,8 +11,22 @@
 # file exists in both directory trees but is not byte-for-byte identical.
 #
 # EXAMPLE:
+#
+# $ cmp-tree first-dir/ second-dir/
+# "first-dir/G2ME-Usage.md" == "second-dir/G2ME-Usage.md"
+# "first-dir/Home.md" == "second-dir/Home.md"
+# "first-dir/images" == "second-dir/images"
+# "first-dir/images/G2ME-GUI.png" differs from "second-dir/images/G2ME-GUI.png"
+# "first-dir/images/G2ME-terminal-demo.gif" exists, but "second-dir/images/G2ME-terminal-demo.gif" does NOT exist
+# "first-dir/Walkthroughs.md" == "second-dir/Walkthroughs.md"
+# All done!
+# File byte-for-byte matches: 3/5
+# Directory matches: 1/1
+#
+# EXAMPLE EXPLANATION:
 # {{{
-# Consider the 2 example directories:
+#
+# Let's assume we have 2 subdirectories in our current directory:
 #
 # $ ls -1
 # first-dir
