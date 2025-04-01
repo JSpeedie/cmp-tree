@@ -1,7 +1,8 @@
-use clap::{command, Arg};
+use clap::{command, Arg}; // For parsing commandline args.
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use std::process::exit; // For exiting with an exit code on failure. Not idiomatic.
 
 
 #[derive(Debug)]
@@ -418,10 +419,13 @@ fn main() {
     let mut max_num_dir_matches: u128 = 0;
     let mut num_file_matches: u128 = 0;
     let mut num_dir_matches: u128 = 0;
+    let mut mismatch_occurred = false;
 
     match compare_directory_trees(first_dir, second_dir) {
         Ok(list) => {
             for e in list {
+                // If we are going to print totals, calculate what the max number of matches for
+                // all the various types would be
                 if flag_print_totals {
                     match e.partial_cmp.first_ft {
                         Some(f_ft) => {
@@ -477,6 +481,7 @@ fn main() {
                     }
                 }
 
+                // Process all comparisons and print output about them if necessary
                 match e.partial_cmp.file_cmp {
                     FileCmp::Match => {
                         if flag_print_matches {
@@ -495,27 +500,32 @@ fn main() {
                         println!("{:?} is not of the same type as {:?}", e.first_path,
                             e.second_path);
                         if flag_pretty_output { print!("{NORMAL}"); }
+                        mismatch_occurred = true;
                     },
                     FileCmp::ContentMismatch => {
                         if flag_pretty_output { print!("{BOLD}{RED}"); }
                         println!("{:?} differs from {:?}", e.first_path, e.second_path);
                         if flag_pretty_output { print!("{NORMAL}"); }
+                        mismatch_occurred = true;
                     },
                     FileCmp::NeitherFileExists => {
                         if flag_pretty_output { print!("{BOLD}{RED}"); }
                         println!("Neither {:?} nor {:?} exist", e.first_path, e.second_path);
                         if flag_pretty_output { print!("{NORMAL}"); }
+                        mismatch_occurred = true;
                     },
                     FileCmp::OnlyFirstFileExists => {
                         if flag_pretty_output { print!("{BOLD}{RED}"); }
                         println!("{:?} exists, but {:?} does NOT exist", e.first_path, e.second_path);
                         if flag_pretty_output { print!("{NORMAL}"); }
+                        mismatch_occurred = true;
                     },
                     FileCmp::OnlySecondFileExists => {
                         if flag_pretty_output { print!("{BOLD}{RED}"); }
                         println!("{:?} does NOT exist, but {:?} does exist", e.first_path,
                             e.second_path);
                         if flag_pretty_output { print!("{NORMAL}"); }
+                        mismatch_occurred = true;
                     },
                 }
             }
@@ -529,5 +539,10 @@ fn main() {
         println!("All done!");
         println!("File byte-for-byte matches: {num_file_matches}/{max_num_file_matches}");
         println!("Directory matches: {num_dir_matches}/{max_num_dir_matches}");
+    }
+
+    // Exit with an exit code that indicates failure if there was a single mismatch.
+    if mismatch_occurred {
+        exit(1);
     }
 }
