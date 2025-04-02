@@ -477,6 +477,31 @@ fn main() {
     let first_dir = Path::new(first_dir_arg.unwrap());
     let second_dir = Path::new(second_dir_arg.unwrap());
 
+    // If either of the given directories don't exist, or errors occur when the program tries
+    // to access them, exit the program early
+    match first_dir.try_exists() {
+        Ok(true) => (),
+        Ok(false) => {
+            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            exit(1)
+        },
+        Err(_) => {
+            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            exit(1)
+        },
+    }
+    match second_dir.try_exists() {
+        Ok(true) => (),
+        Ok(false) => {
+            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            exit(1)
+        },
+        Err(_) => {
+            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            exit(1)
+        },
+    }
+
     if match_result.get_flag("matches") {
         flag_print_matches = true;
     }
