@@ -1,6 +1,6 @@
 use clap::{command, Arg}; // For parsing commandline args.
 use std::io::prelude::*;
-use std::fs::File;
+use std::fs::{File,read_link};
 use std::path::{Path, PathBuf};
 use std::process::exit; // For exiting with an exit code on failure. Not idiomatic.
 
@@ -10,6 +10,11 @@ enum RegFileCmp {
     Identical,
     DiffLength,
     DiffContents,
+}
+#[derive(Debug)]
+enum SoftLinkCmp {
+    Identical,
+    DiffLink,
 }
 
 
@@ -192,7 +197,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFil
                     if first_bytes_read == 0 && second_bytes_read == 0 {
                         return Ok(RegFileCmp::Identical);
                     }
-                    // TODO: is this a (1) functional and a (2) good equivalent for C++ memcmp?
+                    // TODO: is this a (1) functional and (2) a correct equivalent for C++ memcmp?
                     if first_buf != second_buf {
                         return Ok(RegFileCmp::DiffContents);
                     }
@@ -204,6 +209,41 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFil
             Err(_) => {
                 return Err(());
             }
+        }
+    }
+    /* }}} */
+}
+
+
+/// Takes two paths and a result representing how the soft links compare. Both file paths must
+/// point to soft links and both soft links must exist.
+///
+/// #### Parameters:
+/// * `first_path` a file path that points to the first soft link we wish to compare.
+/// * `second_path` a file path that points to the second soft link we wish to compare.
+/// #### Return:
+/// * `Ok(SoftLinkCmp)` on success and `Err(())` on failure.
+fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<SoftLinkCmp, ()> {
+    /* {{{ */
+
+    match read_link(first_path) {
+        Ok(first_link_target) => match read_link(second_path) {
+            Ok(second_link_target) => {
+                println!("first link goes to: \"{:?}\", second link goes to \"{:?}\"", first_link_target, second_link_target);
+                /* If the two soft links point to the same file */
+                if first_link_target == second_link_target {
+                    return Ok(SoftLinkCmp::Identical);
+                /* If the two soft links point to a different file */
+                } else {
+                    return Ok(SoftLinkCmp::DiffLink);
+                }
+            },
+            Err(_) => {
+                return Err(());
+            }
+        },
+        Err(_) => {
+            return Err(());
         }
     }
     /* }}} */
@@ -258,22 +298,36 @@ fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileCom
     }
 
     /* Check file modes/types. At this point we know both files exist, but if they are of different
-     * types (e.g. a fifo vs a regular file) then return with the two file modes/types and setting
+     * types (e.g. a link vs a regular file) then return with the two file modes/types and setting
      * the comparison member so the caller knows the types of the two files */
     let first_filetype;
     let second_filetype;
+    let first_file_metadata;
+    let second_file_metadata;
 
-    match first_path.metadata() {
+    /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks, so
+     * we need to check if the files we're looking at are symlinks and gets their metadata
+     * appropriately */
+    match first_path.is_symlink() {
+        true => first_file_metadata = first_path.symlink_metadata(),
+        false => first_file_metadata = first_path.metadata(),
+    }
+    match second_path.is_symlink() {
+        true => second_file_metadata = second_path.symlink_metadata(),
+        false => second_file_metadata = second_path.metadata(),
+    }
+
+    match first_file_metadata {
         Ok(md) => first_filetype = Some(md.file_type()),
         Err(_) => return Err(()),
     }
-    match second_path.metadata() {
+    match second_file_metadata {
         Ok(md) => second_filetype = Some(md.file_type()),
         Err(_) => return Err(()),
     }
 
     /* If the two paths point to files that are of different types (e.g. a directory vs. a symlink,
-     * a fifo vs a regular file) then return early */
+     * a directory vs a regular file) then return early */
     if first_filetype != second_filetype {
         return Ok(PartialFileComparison {
             first_ft: first_filetype,
@@ -303,6 +357,25 @@ fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileCom
                 });
             },
             Ok(RegFileCmp::DiffLength | RegFileCmp::DiffContents) => {
+                return Ok(PartialFileComparison {
+                    first_ft: first_filetype,
+                    second_ft: second_filetype,
+                    file_cmp: FileCmp::ContentMismatch,
+                });
+            },
+            Err(_) => return Err(())
+        }
+    } else if first_filetype.unwrap().is_symlink() {
+        /* Call the soft link specific comparison function and return accordingly */
+        match compare_soft_links(first_path, second_path) {
+            Ok(SoftLinkCmp::Identical) => {
+                return Ok(PartialFileComparison {
+                    first_ft: first_filetype,
+                    second_ft: second_filetype,
+                    file_cmp: FileCmp::Match,
+                });
+            },
+            Ok(SoftLinkCmp::DiffLink) => {
                 return Ok(PartialFileComparison {
                     first_ft: first_filetype,
                     second_ft: second_filetype,
@@ -370,7 +443,6 @@ fn compare_directory_trees(first_root: &Path, second_root: &Path) ->
 fn main() {
     let mut flag_print_totals: bool = false;
     let mut flag_print_matches: bool = false;
-    // TODO: add the -p flag (pretty print) flag implementation
     let mut flag_pretty_output: bool = false;
 
     let match_result = command!()
@@ -417,8 +489,10 @@ fn main() {
 
     let mut max_num_file_matches: u128 = 0;
     let mut max_num_dir_matches: u128 = 0;
+    let mut max_num_softlink_matches: u128 = 0;
     let mut num_file_matches: u128 = 0;
     let mut num_dir_matches: u128 = 0;
+    let mut num_softlink_matches: u128 = 0;
     let mut mismatch_occurred = false;
 
     match compare_directory_trees(first_dir, second_dir) {
@@ -479,6 +553,32 @@ fn main() {
                             }
                         },
                     }
+                    match e.partial_cmp.first_ft {
+                        Some(f_ft) => {
+                            if f_ft.is_symlink() {
+                                max_num_softlink_matches += 1;
+                            } else {
+                                match e.partial_cmp.second_ft {
+                                    Some(s_ft) => {
+                                        if s_ft.is_symlink() {
+                                            max_num_softlink_matches += 1;
+                                        }
+                                    },
+                                    None => (),
+                                }
+                            }
+                        },
+                        None => {
+                            match e.partial_cmp.second_ft {
+                                Some(s_ft) => {
+                                    if s_ft.is_symlink() {
+                                        max_num_softlink_matches += 1;
+                                    }
+                                },
+                                None => (),
+                            }
+                        },
+                    }
                 }
 
                 // Process all comparisons and print output about them if necessary
@@ -493,6 +593,8 @@ fn main() {
                             num_file_matches += 1;
                         } else if e.partial_cmp.first_ft.unwrap().is_dir() {
                             num_dir_matches += 1;
+                        } else if e.partial_cmp.first_ft.unwrap().is_symlink() {
+                            num_softlink_matches += 1;
                         }
                     },
                     FileCmp::TypeMismatch => {
@@ -539,6 +641,7 @@ fn main() {
         println!("All done!");
         println!("File byte-for-byte matches: {num_file_matches}/{max_num_file_matches}");
         println!("Directory matches: {num_dir_matches}/{max_num_dir_matches}");
+        println!("Soft link matches: {num_softlink_matches}/{max_num_softlink_matches}");
     }
 
     // Exit with an exit code that indicates failure if there was a single mismatch.
