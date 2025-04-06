@@ -135,15 +135,15 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 		second_file_file_size=$(stat -c %s "$D2_FILE")
 		if [ $first_file_file_size -ne $second_file_file_size ]; then
 			printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
-		fi
-
-		# If the file as it exists in the first directory tree is byte-for-byte
-		# identical to the file as it exists in the second directory tree
-		if cmp "$D1_FILE" "$D2_FILE" > /dev/null; then
-			printf "${green}\"${D1_FILE}\" == \"${D2_FILE}\"${end}\n"
-			let NUM_FILE_MATCHES+=1
 		else
-			printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
+			# If the file as it exists in the first directory tree is byte-for-byte
+			# identical to the file as it exists in the second directory tree
+			if cmp "$D1_FILE" "$D2_FILE" > /dev/null; then
+				printf "${green}\"${D1_FILE}\" == \"${D2_FILE}\"${end}\n"
+				let NUM_FILE_MATCHES+=1
+			else
+				printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
+			fi
 		fi
 	# TODO: these two 'elif's should maybe be reduced to one 'elif' that simply
 	# checks if the file type of '$D1_FILE' and the file type of '$D2_FILE'
