@@ -130,10 +130,16 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 
 	# If the current file exists in both directory trees
 	if [ -f "$D1_FILE" ] && [ -f "$D2_FILE" ]; then
+		# If the files are of different sizes, we know they are not a match
+		first_file_file_size=$(stat -c %s "$D1_FILE")
+		second_file_file_size=$(stat -c %s "$D2_FILE")
+		if [ $first_file_file_size -ne $second_file_file_size ]; then
+			printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
+		fi
+
 		# If the file as it exists in the first directory tree is byte-for-byte
 		# identical to the file as it exists in the second directory tree
 		if cmp "$D1_FILE" "$D2_FILE" > /dev/null; then
-		# if cmp "$D1_FILE" "$D2_FILE"; then
 			printf "${green}\"${D1_FILE}\" == \"${D2_FILE}\"${end}\n"
 			let NUM_FILE_MATCHES+=1
 		else
