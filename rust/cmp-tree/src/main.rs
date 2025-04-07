@@ -11,6 +11,8 @@ enum RegFileCmp {
     DiffLength,
     DiffContents,
 }
+
+
 #[derive(Debug)]
 enum SoftLinkCmp {
     Identical,
@@ -55,17 +57,78 @@ struct FullFileComparison {
 }
 
 
+/* A struct used to define the configuration `cmp-tree` functions will run under. Many functions
+ * within `cmp-tree` will require a Config struct and the values of said struct will affect how
+ * they work or run. */
+struct Config {
+    matches: bool,
+    pretty: bool,
+    totals: bool,
+}
+
+
+/* A struct used to keep count of the max number and the found number of files, directories, and
+ * soft links in a given directory tree comparison */
+struct Totals {
+    max_file_matches: u128,
+    max_dir_matches: u128,
+    max_softlink_matches: u128,
+    file_matches: u128,
+    dir_matches: u128,
+    softlink_matches: u128,
+}
+
+
 /* For printing coloured output */
+#[allow(dead_code)]
 const NOTHING: &str = "";
 const BOLD: &str = "\x1B[1m";
 const NORMAL: &str = "\x1B[0m";
 const RED: &str = "\x1B[31m";
 const GREEN: &str = "\x1B[32m";
+#[allow(dead_code)]
 const YELLOW: &str = "\x1B[33m";
+#[allow(dead_code)]
 const BLUE: &str = "\x1B[34m";
+#[allow(dead_code)]
 const MAGENTA: &str = "\x1B[35m";
+#[allow(dead_code)]
 const CYAN: &str = "\x1B[36m";
+#[allow(dead_code)]
 const WHITE: &str = "\x1B[37m";
+
+
+/// Returns the default config for `cmp-tree`.
+///
+/// #### Return:
+/// * a `Config` struct will all its values set to the default values for `cmp-tree`.
+fn default_config() -> Config {
+    /* {{{ */
+    return Config {
+        matches: false,
+        pretty: false,
+        totals: false,
+    };
+    /* }}} */
+}
+
+
+/// Returns a freshly initialized Totals struct.
+///
+/// #### Return:
+/// * a `Totals` struct will all its values set to suitable defaults.
+fn default_totals() -> Totals {
+    /* {{{ */
+    return Totals {
+        max_file_matches: 0,
+        max_dir_matches: 0,
+        max_softlink_matches: 0,
+        file_matches: 0,
+        dir_matches: 0,
+        softlink_matches: 0,
+    };
+    /* }}} */
+}
 
 
 /// Returns an unsorted vector list of relative file paths for all files (in the broad sense of the
@@ -397,6 +460,22 @@ fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileCom
 }
 
 
+/// Takes two paths, each pointing to directories that root directory trees and returns a `Result`
+/// that either contains a `Vec` of `FullFileComparison`s, representing a list of comparisons
+/// between all files in the directory trees, or an empty `Err`, indicating that an error occurred
+/// in the process of comparing the two directory trees.
+///
+/// #### Parameters:
+/// * `first_root` a file path that points to the root directory of the first directory tree we
+///     wish to compare.
+/// * `second_root` a file path that points to the root directory of the second directory tree we
+///     wish to compare.
+/// #### Return:
+/// * a `Result<Vec<FullFileComparison>, ()>` that represents whether this directory tree
+///     comparison was able to be caried out successfully or not. If the `Result` turns out to be
+///     the `Vec<FullFileComparison>`, then the caller is given a list of all the file comparisons
+///     that were performed during the larger, directory tree comparison. If the `Result` turns out
+///     to be an `Err`, then this function experienced some sort of error.
 fn compare_directory_trees(first_root: &Path, second_root: &Path) -> 
     Result<Vec<FullFileComparison>, ()> {
     /* {{{ */
@@ -440,11 +519,250 @@ fn compare_directory_trees(first_root: &Path, second_root: &Path) ->
 }
 
 
-fn main() {
-    let mut flag_print_totals: bool = false;
-    let mut flag_print_matches: bool = false;
-    let mut flag_pretty_output: bool = false;
+/// Takes a `Totals` struct `totals_count` and increments the relevant members inside it based on
+/// the result of a file comparison represented by `p_cmp`.
+///
+/// #### Parameters:
+/// * `totals_count` a `Totals` representing running totals for a given directory tree comparison.
+/// * `p_cmp` a `PartialFileComparison` containing only the necessary the information about the 2
+///     files that were compared.
+fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
+    /* {{{ */
 
+    /* First we determine how the given PartialFileComparison should affect the max file,
+     * directory, etc. match counts in the Totals struct */
+    match p_cmp.first_ft {
+        Some(f_ft) => {
+            if f_ft.is_dir() {
+                totals_count.max_dir_matches += 1;
+            } else {
+                match p_cmp.second_ft {
+                    Some(s_ft) => {
+                        if s_ft.is_dir() {
+                            totals_count.max_dir_matches += 1;
+                        }
+                    },
+                    None => (),
+                }
+            }
+        },
+        None => {
+            match p_cmp.second_ft {
+                Some(s_ft) => {
+                    if s_ft.is_dir() {
+                        totals_count.max_dir_matches += 1;
+                    }
+                },
+                None => (),
+            }
+        },
+    }
+    match p_cmp.first_ft {
+        Some(f_ft) => {
+            if f_ft.is_file() {
+                totals_count.max_file_matches += 1;
+            } else {
+                match p_cmp.second_ft {
+                    Some(s_ft) => {
+                        if s_ft.is_file() {
+                            totals_count.max_file_matches += 1;
+                        }
+                    },
+                    None => (),
+                }
+            }
+        },
+        None => {
+            match p_cmp.second_ft {
+                Some(s_ft) => {
+                    if s_ft.is_file() {
+                        totals_count.max_file_matches += 1;
+                    }
+                },
+                None => (),
+            }
+        },
+    }
+    match p_cmp.first_ft {
+        Some(f_ft) => {
+            if f_ft.is_symlink() {
+                totals_count.max_softlink_matches += 1;
+            } else {
+                match p_cmp.second_ft {
+                    Some(s_ft) => {
+                        if s_ft.is_symlink() {
+                            totals_count.max_softlink_matches += 1;
+                        }
+                    },
+                    None => (),
+                }
+            }
+        },
+        None => {
+            match p_cmp.second_ft {
+                Some(s_ft) => {
+                    if s_ft.is_symlink() {
+                        totals_count.max_softlink_matches += 1;
+                    }
+                },
+                None => (),
+            }
+        },
+    }
+
+    /* Second, we determine how the given PartialFileComparison should affect the actual file,
+     * directory, etc. match counts in the Totals struct */
+    match p_cmp.file_cmp {
+        FileCmp::Match => {
+            if p_cmp.first_ft.unwrap().is_file() {
+                totals_count.file_matches += 1;
+            } else if p_cmp.first_ft.unwrap().is_dir() {
+                totals_count.dir_matches += 1;
+            } else if p_cmp.first_ft.unwrap().is_symlink() {
+                totals_count.softlink_matches += 1;
+            }
+        },
+        /* If the file comparison is anything but a match, do nothing to the totals */
+        _ => (),
+    }
+    /* }}} */
+}
+
+
+/// Takes a `FullFileComparison` and prints out the necessary information about it. What
+/// information is printed will depend on the values of `config`.
+///
+/// #### Parameters:
+/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
+///     through command line arguments to the program.
+/// * `full_comp` a `FullFileComparison` containing all the information about the 2 files that
+///     were compared.
+fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
+    /* {{{ */
+    match full_comp.partial_cmp.file_cmp {
+        FileCmp::Match => {
+            if config.matches {
+                if config.pretty { print!("{BOLD}{GREEN}"); }
+                println!("{:?} == {:?}", full_comp.first_path, full_comp.second_path);
+                if config.pretty { print!("{NORMAL}"); }
+            }
+        },
+        FileCmp::TypeMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} is not of the same type as {:?}", full_comp.first_path,
+                full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::ContentMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} differs from {:?}", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::NeitherFileExists => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("Neither {:?} nor {:?} exist", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::OnlyFirstFileExists => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::OnlySecondFileExists => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} does NOT exist, but {:?} does exist", full_comp.first_path,
+                full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+    }
+    /* }}} */
+}
+
+
+/// Takes a `Result` possibly containing a `Vec` of `FullFileComparison`s and prints out the
+/// necessary information about the list of file comparisons if the `directory_tree_comparison`
+/// is not an `Err`. What information is printed will depend on the values of `config`.
+///
+/// #### Parameters:
+/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
+///     through command line arguments to the program.
+/// * `directory_tree_comparison` a `Result` possibly containing a `Vec` of `FullFileComparison`s.
+///     Typically, this parameter is the result of a call to `compare_directory_trees()`.
+fn print_output(config: &Config, directory_tree_comparison: Result<Vec<FullFileComparison>, ()>) {
+    /* {{{ */
+
+    let mut totals_count = default_totals();
+
+    match directory_tree_comparison {
+        Ok(list) => {
+
+            for e in list {
+                /* If we are going to print totals, update our totals count struct */
+                if config.totals { update_totals(&mut totals_count, &e.partial_cmp); }
+
+                /* Print what needs to be printed for the current comparison. This function call
+                 * may very well print nothing */
+                print_one_comparison(&config, &e);
+            }
+        },
+        Err(_) => {
+            println!("ERROR: Failed to get the list of comparisons between the two directory trees.");
+            return;
+        }
+    }
+
+    if config.totals {
+        println!("All done!");
+        println!("File byte-for-byte matches: {0}/{1}", totals_count.file_matches, totals_count.max_file_matches);
+        println!("Directory matches: {0}/{1}", totals_count.dir_matches, totals_count.max_dir_matches);
+        println!("Soft link matches: {0}/{1}", totals_count.softlink_matches, totals_count.max_softlink_matches);
+    }
+    /* }}} */
+}
+
+
+/// Takes a `Result` possibly containing a `Vec` of `FullFileComparison`s and returns a `Result`
+/// either containing a boolean representing whether or not the file comparison list received as
+/// input contains any mismatches or an empty `Err` indicating that the provided `Result` file
+/// comparison list had an error.
+///
+/// #### Parameters:
+/// * `directory_tree_comparison` a `Result` possibly containing a `Vec` of `FullFileComparison`s.
+///     Typically, this parameter is the result of a call to `compare_directory_trees()`.
+/// #### Return:
+/// * a `Result<bool, ()>` that represents whether this function was able to successfully evaluate
+///     its input. If the input itself did not have an error, then the return value will contain a
+///     boolean that will be `true` if there were any mismatches in the directory tree comparison
+///     and `false` if the comparison found the two directory trees to be identical.
+fn directory_tree_comparison_contains_mismatch(
+    directory_tree_comparison: &Result<Vec<FullFileComparison>, ()>) -> Result<bool, ()> {
+    /* {{{ */
+
+    /* Go through the directory tree comparison result */
+    match directory_tree_comparison {
+        Ok(list) => {
+            /* For every comparison in the list... */
+            for e in list {
+                /* If the comparison found a mismatch of any kind between the two files, return
+                 * early */
+                match e.partial_cmp.file_cmp {
+                    FileCmp::Match => (),
+                    _ => return Ok(true),
+                }
+            }
+            /* If we make it here, that means no mismatches of any kind were found in the file
+             * comparison list. */
+            return Ok(false);
+        },
+        Err(_) => {
+            return Err(());
+        }
+    };
+    /* }}} */
+}
+
+
+fn main() {
     let match_result = command!()
         .arg(
             Arg::new("first_root_dir").required(true).index(1)
@@ -483,194 +801,53 @@ fn main() {
         Ok(true) => (),
         Ok(false) => {
             println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
-            exit(1)
+            exit(2)
         },
         Err(_) => {
             println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
-            exit(1)
+            exit(2)
         },
     }
     match second_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => {
             println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
-            exit(1)
+            exit(2)
         },
         Err(_) => {
             println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
-            exit(1)
+            exit(2)
         },
     }
 
-    if match_result.get_flag("matches") {
-        flag_print_matches = true;
-    }
-    if match_result.get_flag("pretty") {
-        flag_pretty_output = true;
-    }
-    if match_result.get_flag("totals") {
-        flag_print_totals = true;
-    }
+    /* Instantiate a default config */
+    let mut conf = default_config();
 
-    let mut max_num_file_matches: u128 = 0;
-    let mut max_num_dir_matches: u128 = 0;
-    let mut max_num_softlink_matches: u128 = 0;
-    let mut num_file_matches: u128 = 0;
-    let mut num_dir_matches: u128 = 0;
-    let mut num_softlink_matches: u128 = 0;
-    let mut mismatch_occurred = false;
+    /* Modify the config as the commandline flags/argument require */
+    if match_result.get_flag("matches") { conf.matches = true; }
+    if match_result.get_flag("pretty") { conf.pretty = true; }
+    if match_result.get_flag("totals") { conf.totals = true; }
 
-    match compare_directory_trees(first_dir, second_dir) {
-        Ok(list) => {
-            for e in list {
-                // If we are going to print totals, calculate what the max number of matches for
-                // all the various types would be
-                if flag_print_totals {
-                    match e.partial_cmp.first_ft {
-                        Some(f_ft) => {
-                            if f_ft.is_dir() {
-                                max_num_dir_matches += 1;
-                            } else {
-                                match e.partial_cmp.second_ft {
-                                    Some(s_ft) => {
-                                        if s_ft.is_dir() {
-                                            max_num_dir_matches += 1;
-                                        }
-                                    },
-                                    None => (),
-                                }
-                            }
-                        },
-                        None => {
-                            match e.partial_cmp.second_ft {
-                                Some(s_ft) => {
-                                    if s_ft.is_dir() {
-                                        max_num_dir_matches += 1;
-                                    }
-                                },
-                                None => (),
-                            }
-                        },
-                    }
-                    match e.partial_cmp.first_ft {
-                        Some(f_ft) => {
-                            if f_ft.is_file() {
-                                max_num_file_matches += 1;
-                            } else {
-                                match e.partial_cmp.second_ft {
-                                    Some(s_ft) => {
-                                        if s_ft.is_file() {
-                                            max_num_file_matches += 1;
-                                        }
-                                    },
-                                    None => (),
-                                }
-                            }
-                        },
-                        None => {
-                            match e.partial_cmp.second_ft {
-                                Some(s_ft) => {
-                                    if s_ft.is_file() {
-                                        max_num_file_matches += 1;
-                                    }
-                                },
-                                None => (),
-                            }
-                        },
-                    }
-                    match e.partial_cmp.first_ft {
-                        Some(f_ft) => {
-                            if f_ft.is_symlink() {
-                                max_num_softlink_matches += 1;
-                            } else {
-                                match e.partial_cmp.second_ft {
-                                    Some(s_ft) => {
-                                        if s_ft.is_symlink() {
-                                            max_num_softlink_matches += 1;
-                                        }
-                                    },
-                                    None => (),
-                                }
-                            }
-                        },
-                        None => {
-                            match e.partial_cmp.second_ft {
-                                Some(s_ft) => {
-                                    if s_ft.is_symlink() {
-                                        max_num_softlink_matches += 1;
-                                    }
-                                },
-                                None => (),
-                            }
-                        },
-                    }
-                }
+    /* Perform the comparison between the two directory trees, and print output for the result so
+     * the user can see how the two directory trees compared */
+    let directory_tree_comparison_res = compare_directory_trees(first_dir, second_dir);
+    let mismatch_occurred =
+        directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res);
+    print_output(&conf, directory_tree_comparison_res);
 
-                // Process all comparisons and print output about them if necessary
-                match e.partial_cmp.file_cmp {
-                    FileCmp::Match => {
-                        if flag_print_matches {
-                            if flag_pretty_output { print!("{BOLD}{GREEN}"); }
-                            println!("{:?} == {:?}", e.first_path, e.second_path);
-                            if flag_pretty_output { print!("{NORMAL}"); }
-                        }
-                        if e.partial_cmp.first_ft.unwrap().is_file() {
-                            num_file_matches += 1;
-                        } else if e.partial_cmp.first_ft.unwrap().is_dir() {
-                            num_dir_matches += 1;
-                        } else if e.partial_cmp.first_ft.unwrap().is_symlink() {
-                            num_softlink_matches += 1;
-                        }
-                    },
-                    FileCmp::TypeMismatch => {
-                        if flag_pretty_output { print!("{BOLD}{RED}"); }
-                        println!("{:?} is not of the same type as {:?}", e.first_path,
-                            e.second_path);
-                        if flag_pretty_output { print!("{NORMAL}"); }
-                        mismatch_occurred = true;
-                    },
-                    FileCmp::ContentMismatch => {
-                        if flag_pretty_output { print!("{BOLD}{RED}"); }
-                        println!("{:?} differs from {:?}", e.first_path, e.second_path);
-                        if flag_pretty_output { print!("{NORMAL}"); }
-                        mismatch_occurred = true;
-                    },
-                    FileCmp::NeitherFileExists => {
-                        if flag_pretty_output { print!("{BOLD}{RED}"); }
-                        println!("Neither {:?} nor {:?} exist", e.first_path, e.second_path);
-                        if flag_pretty_output { print!("{NORMAL}"); }
-                        mismatch_occurred = true;
-                    },
-                    FileCmp::OnlyFirstFileExists => {
-                        if flag_pretty_output { print!("{BOLD}{RED}"); }
-                        println!("{:?} exists, but {:?} does NOT exist", e.first_path, e.second_path);
-                        if flag_pretty_output { print!("{NORMAL}"); }
-                        mismatch_occurred = true;
-                    },
-                    FileCmp::OnlySecondFileExists => {
-                        if flag_pretty_output { print!("{BOLD}{RED}"); }
-                        println!("{:?} does NOT exist, but {:?} does exist", e.first_path,
-                            e.second_path);
-                        if flag_pretty_output { print!("{NORMAL}"); }
-                        mismatch_occurred = true;
-                    },
-                }
-            }
+    /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
+     * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
+     * error in assessing whether there was any mismatch in the directory tree comparison, exit
+     * with exit code 2. */
+    match mismatch_occurred {
+        Ok(true) => {
+            exit(1);
+        },
+        Ok(false) => {
+            exit(0);
         },
         Err(_) => {
-            println!("Error getting the list of comparisons between the two directory trees");
+            exit(2);
         }
-    }
-
-    if flag_print_totals {
-        println!("All done!");
-        println!("File byte-for-byte matches: {num_file_matches}/{max_num_file_matches}");
-        println!("Directory matches: {num_dir_matches}/{max_num_dir_matches}");
-        println!("Soft link matches: {num_softlink_matches}/{max_num_softlink_matches}");
-    }
-
-    // Exit with an exit code that indicates failure if there was a single mismatch.
-    if mismatch_occurred {
-        exit(1);
     }
 }
