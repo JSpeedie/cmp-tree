@@ -887,6 +887,50 @@ fn directory_tree_comparison_contains_mismatch(
 }
 
 
+/// Takes a `Config` and two `Path`s pointing to two directory trees and compares the two directory
+/// trees, returning an `i32` representing the appropriate exit code for this program given how the
+/// execution went.
+///
+/// #### Parameters:
+/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
+///     through command line arguments to the program.
+/// * `first_dir` a file path that points to the root directory of the first directory tree we
+///     wish to compare. This function assumes that this path points to a directory and that the
+///     directory exists.
+/// * `second_dir` a file path that points to the root directory of the second directory tree we
+///     wish to compare. This function assumes that this path points to a directory and that the
+///     directory exists.
+/// #### Return:
+/// * an `i32` that represents how execution of the directory tree comparison went. If there was an
+///     error during execution, 2 is returned. If the comparison proceeded without error, but
+///     mismatches between files were found, 1 is returned. If the comparison proceeeded without
+///     error and no mismatches were found, 0 is returned.
+fn cmp_tree(config: &Config, first_dir: &Path, second_dir: &Path) -> i32 {
+    /* {{{ */
+    /* Perform the comparison between the two directory trees */
+    let directory_tree_comparison_res = compare_directory_trees(&config, first_dir, second_dir);
+    /* Check if any mismatches occurred (this is needed to determine the exit code of this program
+     * */
+    let mismatch_occurred =
+        directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res);
+    /* Print the appropriate output, provided silent mode is off */
+    if !config.silent {
+        print_output(&config, directory_tree_comparison_res);
+    }
+
+    /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
+     * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
+     * error in assessing whether there was any mismatch in the directory tree comparison, exit
+     * with exit code 2. */
+    match mismatch_occurred {
+        Ok(true) => return 1,
+        Ok(false) => return 0,
+        Err(_) => return 2,
+    }
+    /* }}} */
+}
+
+
 fn main() {
     let match_result = command!()
         .arg(
@@ -961,29 +1005,7 @@ fn main() {
     if match_result.get_flag("silent") { conf.silent = true; }
     if match_result.get_flag("totals") { conf.totals = true; }
 
-    /* Perform the comparison between the two directory trees, and print output for the result so
-     * the user can see how the two directory trees compared */
-    let directory_tree_comparison_res = compare_directory_trees(&conf, first_dir, second_dir);
-    let mismatch_occurred =
-        directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res);
-    /* Only print any output if silent mode is off */
-    if !conf.silent {
-        print_output(&conf, directory_tree_comparison_res);
-    }
-
-    /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
-     * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
-     * error in assessing whether there was any mismatch in the directory tree comparison, exit
-     * with exit code 2. */
-    match mismatch_occurred {
-        Ok(true) => {
-            exit(1);
-        },
-        Ok(false) => {
-            exit(0);
-        },
-        Err(_) => {
-            exit(2);
-        }
-    }
+    /* Call the god function */
+    let exit_code: i32 = cmp_tree(&conf, first_dir, second_dir);
+    exit(exit_code);
 }
