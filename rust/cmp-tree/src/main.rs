@@ -1,51 +1,45 @@
 use clap::{command, Arg}; // For parsing commandline args.
-use std::io::prelude::*;
-use std::fs::{File,read_link};
+use std::fs::{File,FileType,Metadata,read_link};
+use std::io::Read; // For getting the SHA256 hash of a file
 use std::path::{Path, PathBuf};
 use std::process::exit; // For exiting with an exit code on failure. Not idiomatic.
 
 
 #[derive(Debug)]
-enum RegFileCmp {
-    Identical,
-    DiffLength,
-    DiffContents,
-}
-
-
-#[derive(Debug)]
-enum SoftLinkCmp {
-    Identical,
-    DiffLink,
-}
-
-
-#[derive(Debug)]
 enum FileCmp {
-    /* For when the two files (understood in the broad sense) match. For regular files, this
-     * indicates that the two files are byte-for-byte identical. For directories, this mean they
-     * both exist. */
-    Match,
+    /* (1) For Existence Comparisons */
+    /* For when neither of the two files (understood in the broad sense) exist. */
+    ExistenceNeitherFile,
+    /* For when only the first of the two files (understood in the broad sense) exists. */
+    ExistenceOnlyFirstFile,
+    /* For when only the second of the two files (understood in the broad sense) exists. */
+    ExistenceOnlySecondFile,
+    /* (2) For File Type Comparisons */
     /* For when the two files (understood in the broad sense) mismatch in their type (e.g. one is a
      * directory, one is a regular file). */
-    TypeMismatch,
-    /* For when the two files (understood in the broad sense) match in their type, but mismatch in
-     * their content (e.g. both are regular files, but they are not byte-for-byte identical). */
-    ContentMismatch,
-    /* For when neither of the two files (understood in the broad sense) exist. */
-    NeitherFileExists,
-    /* For when only the first of the two files (understood in the broad sense) exists. */
-    OnlyFirstFileExists,
-    /* For when only the second of the two files (understood in the broad sense) exists. */
-    OnlySecondFileExists,
+    FileTypeTypeMismatch,
+    /* (3) For Substance Comparisons */
+    /* For when the two files mismatch in their content (i.e. they are not byte-for-byte
+     * identical). */
+    SubstanceRegFileContentMismatch,
+    /* For when the two soft links mismatch in their link path */
+    SubstanceSoftLinkLinkMismatch,
+    /* (4) For Metadata Comparisons */
+    MetadataAccessTimeMismatch,
+    MetadataCreationTimeMismatch,
+    MetadataModificationTimeMismatch,
+    /* (5) For complete matches */
+    /* For when the two files (understood in the broad sense) match don't mismatch in any of the
+     * possible ways represented above */
+    Match,
 }
 
 
 #[derive(Debug)]
 struct PartialFileComparison {
     file_cmp: FileCmp,
-    first_ft: Option<std::fs::FileType>,
-    second_ft: Option<std::fs::FileType>,
+    first_ft: Option<FileType>,
+    second_ft: Option<FileType>,
 }
 
 
@@ -61,8 +55,10 @@ struct FullFileComparison {
  * within `cmp-tree` will require a Config struct and the values of said struct will affect how
  * they work or run. */
 struct Config {
+    compare_metadata: bool,
     matches: bool,
     pretty: bool,
+    silent: bool,
     totals: bool,
 }
 
@@ -105,8 +101,10 @@ const WHITE: &str = "\x1B[37m";
 fn default_config() -> Config {
     /* {{{ */
     return Config {
+        compare_metadata: false,
         matches: false,
         pretty: false,
+        silent: false,
         totals: false,
     };
     /* }}} */
@@ -215,8 +213,8 @@ fn files_in_tree(root: &Path) -> Vec<PathBuf> {
 /// * `first_path` a file path that points to the first file we wish to compare.
 /// * `second_path` a file path that points to the second file we wish to compare.
 /// #### Return:
-/// * `Ok(RegFileCmp)` on success and `Err(())` on failure.
-fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFileCmp, ()> {
+/// * `Ok(FileCmp)` on success and `Err(())` on failure.
+fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
     const BYTE_COUNT: usize = 8192;
 
@@ -232,7 +230,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFil
         Ok(first_md) => match second_path.metadata() {
             Ok(second_md) => {
                 if first_md.len() != second_md.len() {
-                    return Ok(RegFileCmp::DiffLength);
+                    return Ok(FileCmp::SubstanceRegFileContentMismatch);
                 }
             },
             Err(_) => return Err(()),
@@ -253,16 +251,16 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFil
                 Ok(second_bytes_read) => {
                     /* One file ended before the other */
                     if first_bytes_read != second_bytes_read {
-                        return Ok(RegFileCmp::DiffLength);
+                        return Ok(FileCmp::SubstanceRegFileContentMismatch);
                     }
                     /* If both reads read 0 bytes, that means we have hit the end of both files and
                      * the two files are identical */
                     if first_bytes_read == 0 && second_bytes_read == 0 {
-                        return Ok(RegFileCmp::Identical);
+                        return Ok(FileCmp::Match);
                     }
                     // TODO: is this a (1) functional and (2) a correct equivalent for C++ memcmp?
                     if first_buf != second_buf {
-                        return Ok(RegFileCmp::DiffContents);
+                        return Ok(FileCmp::Match);
                     }
                 },
                 Err(_) => {
@@ -285,20 +283,18 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<RegFil
 /// * `first_path` a file path that points to the first soft link we wish to compare.
 /// * `second_path` a file path that points to the second soft link we wish to compare.
 /// #### Return:
-/// * `Ok(SoftLinkCmp)` on success and `Err(())` on failure.
-fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<SoftLinkCmp, ()> {
+/// * `Ok(FileCmp)` on success and `Err(())` on failure.
+fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
-
     match read_link(first_path) {
         Ok(first_link_target) => match read_link(second_path) {
             Ok(second_link_target) => {
-                println!("first link goes to: \"{:?}\", second link goes to \"{:?}\"", first_link_target, second_link_target);
                 /* If the two soft links point to the same file */
                 if first_link_target == second_link_target {
-                    return Ok(SoftLinkCmp::Identical);
+                    return Ok(FileCmp::Match);
                 /* If the two soft links point to a different file */
                 } else {
-                    return Ok(SoftLinkCmp::DiffLink);
+                    return Ok(FileCmp::SubstanceSoftLinkLinkMismatch);
                 }
             },
             Err(_) => {
@@ -313,149 +309,271 @@ fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<SoftLinkC
 }
 
 
-/// Takes two paths and returns a `Result` that either contains a `PartialFileComparison` that
-/// represents how the two files (understood in the broad sense) pointed to by the two paths
-/// compare or an `Err` indicating that an error occurred in the process of comparing the two
+/// Takes two paths and returns a `Result` that either contains a `FileCmp` that represents how the
+/// two files (understood in the broad sense) pointed to by the two paths compare in terms of their
+/// existence or an `Err` indicating that an error occurred in the process of comparing the two
 /// files.
 ///
 /// #### Parameters:
 /// * `first_path` a file path that points to the first file we wish to compare.
 /// * `second_path` a file path that points to the second file we wish to compare.
 /// #### Return:
-/// * a `PartialFileComparison` that represents whether the two files are equivalent, if they
-///     differ and how they differ, as well as the two file types of the files.
-fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileComparison, ()> {
+/// * a `FileCmp` that represents whether the two files are equivalent in terms of existence and
+///     how they are different in this regard if they are.
+fn compare_files_compare_existences(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
-    /* Check file existences first. If neither path points to files that exist, return that neither
-     * exists. If one file exists, but the other does not, get the file mode/type of the existing
-     * file and return, setting the comparison member so that the caller knows which file does not
-     * exist */
+
+    /* If neither path points to files that exist, return that neither exists */
     if !first_path.exists() && !second_path.exists() {
-        return Ok(PartialFileComparison {
-            first_ft: None,
-            second_ft: None,
-            file_cmp: FileCmp::NeitherFileExists,
-        });
+        return Ok(FileCmp::ExistenceNeitherFile);
+    /* If only one of the file paths points to an existing file, note which file exists */
     } else if first_path.exists() && !second_path.exists() {
-        match first_path.metadata() {
-            Ok(md) => {
-                return Ok(PartialFileComparison {
-                    first_ft: Some(md.file_type()),
-                    second_ft: None,
-                    file_cmp: FileCmp::OnlyFirstFileExists,
-                });
-            },
-            Err(_) => return Err(())
-        }
+        return Ok(FileCmp::ExistenceOnlyFirstFile);
     } else if !first_path.exists() && second_path.exists() {
-        match second_path.metadata() {
-            Ok(md) => {
-                return Ok(PartialFileComparison {
-                    first_ft: None,
-                    second_ft: Some(md.file_type()),
-                    file_cmp: FileCmp::OnlySecondFileExists,
-                });
-            },
-            Err(_) => return Err(())
-        }
+        return Ok(FileCmp::ExistenceOnlySecondFile);
     }
 
-    /* Check file modes/types. At this point we know both files exist, but if they are of different
-     * types (e.g. a link vs a regular file) then return with the two file modes/types and setting
-     * the comparison member so the caller knows the types of the two files */
-    let first_filetype;
-    let second_filetype;
-    let first_file_metadata;
-    let second_file_metadata;
+    return Ok(FileCmp::Match);
+    /* }}} */
+}
+
+
+/// A helper function for `compare_files()`. Takes two paths and returns a `Result` that either
+/// contains a tuple of two `Metadata`s (representing the metadata of the two files being compared)
+/// or an `Err` indicating that an error occurred in the process of acquiring the metadata.
+///
+/// #### Parameters:
+/// * `first_path` a file path that points to the first file whose metadata we wish to get.
+/// * `second_path` a file path that points to the second file whose metadata we wish to get.
+/// #### Return:
+/// * a `Result<(Metadata, Metadata), ()>` that either contains the metadata of the two files or
+///     an Err indicating that this function failed to get the metadata on the two files
+///     successfully.
+fn compare_files_get_metadata(first_path: &Path, second_path: &Path) ->
+    Result<(Metadata, Metadata), ()> {
+    /* {{{ */
+
+    let first_file_metadata_res;
+    let second_file_metadata_res;
+    let first_file_metadata: Metadata;
+    let second_file_metadata: Metadata;
 
     /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks, so
      * we need to check if the files we're looking at are symlinks and gets their metadata
      * appropriately */
     match first_path.is_symlink() {
-        true => first_file_metadata = first_path.symlink_metadata(),
-        false => first_file_metadata = first_path.metadata(),
+        true => first_file_metadata_res = first_path.symlink_metadata(),
+        false => first_file_metadata_res = first_path.metadata(),
     }
     match second_path.is_symlink() {
-        true => second_file_metadata = second_path.symlink_metadata(),
-        false => second_file_metadata = second_path.metadata(),
+        true => second_file_metadata_res = second_path.symlink_metadata(),
+        false => second_file_metadata_res = second_path.metadata(),
     }
 
-    match first_file_metadata {
-        Ok(md) => first_filetype = Some(md.file_type()),
-        Err(_) => return Err(()),
-    }
-    match second_file_metadata {
-        Ok(md) => second_filetype = Some(md.file_type()),
-        Err(_) => return Err(()),
+    if let Ok(md) = first_file_metadata_res {
+        first_file_metadata = md;
+    } else {
+        return Err(());
     }
 
-    /* If the two paths point to files that are of different types (e.g. a directory vs. a symlink,
-     * a directory vs a regular file) then return early */
-    if first_filetype != second_filetype {
-        return Ok(PartialFileComparison {
-            first_ft: first_filetype,
-            second_ft: second_filetype,
-            file_cmp: FileCmp::TypeMismatch,
-        });
+    if let Ok(md) = second_file_metadata_res {
+        second_file_metadata = md;
+    } else {
+        return Err(());
     }
 
-    /* Check that the two files are equivalent. At this point we know both files exist and that
-     * they are of the same type. The various types the files could both be need individual methods
-     * for checking equivalence. Regular files check that every byte of their contents are
-     * identical, directories will simply return a match since both files are directories */
-    if first_filetype.unwrap().is_dir() {
-        return Ok(PartialFileComparison {
-            first_ft: first_filetype,
-            second_ft: second_filetype,
-            file_cmp: FileCmp::Match,
-        });
-    } else if first_filetype.unwrap().is_file() {
-        /* Call the regular file specific comparison function and return accordingly */
-        match compare_regular_files(first_path, second_path) {
-            Ok(RegFileCmp::Identical) => {
-                return Ok(PartialFileComparison {
-                    first_ft: first_filetype,
-                    second_ft: second_filetype,
-                    file_cmp: FileCmp::Match,
-                });
-            },
-            Ok(RegFileCmp::DiffLength | RegFileCmp::DiffContents) => {
-                return Ok(PartialFileComparison {
-                    first_ft: first_filetype,
-                    second_ft: second_filetype,
-                    file_cmp: FileCmp::ContentMismatch,
-                });
-            },
-            Err(_) => return Err(())
-        }
-    } else if first_filetype.unwrap().is_symlink() {
+    return Ok((first_file_metadata, second_file_metadata));
+    /* }}} */
+}
+
+
+/// A helper function for `compare_files()`. Takes two paths that point to two files of the same
+/// file type and returns a `Result` that either contains a `FileCmp` that represents how the two
+/// files (understood in the broad sense) compare in terms of their substance or an `Err`
+/// indicating that an error occurred in the process of comparing the two files.
+///
+/// #### Parameters:
+/// * `first_path` a file path that points to the first file we wish to compare.
+/// * `representative_filetype` a file type, usually derived from one of the two files, that is the
+///     same between the two files pointed to by the two paths.
+/// * `second_path` a file path that points to the second file we wish to compare.
+/// #### Return:
+/// * a `FileCmp` that represents whether the two files are equivalent in terms of substance and
+///     how they are different in this regard if they are.
+fn compare_files_compare_substance(first_path: &Path, representative_filetype: &FileType,
+    second_path: &Path) -> Result<FileCmp, ()> {
+    /* {{{ */
+
+    /* TODO: The substance of directories are currently evaluated as being a match simply if both
+     * directories exist. I'm not sure if there's anything else to evaluate with directories */
+    if representative_filetype.is_dir() {
+        return Ok(FileCmp::Match);
+    } else if representative_filetype.is_file() {
+        return compare_regular_files(first_path, second_path);
+    } else if representative_filetype.is_symlink() {
         /* Call the soft link specific comparison function and return accordingly */
-        match compare_soft_links(first_path, second_path) {
-            Ok(SoftLinkCmp::Identical) => {
-                return Ok(PartialFileComparison {
-                    first_ft: first_filetype,
-                    second_ft: second_filetype,
-                    file_cmp: FileCmp::Match,
-                });
-            },
-            Ok(SoftLinkCmp::DiffLink) => {
-                return Ok(PartialFileComparison {
-                    first_ft: first_filetype,
-                    second_ft: second_filetype,
-                    file_cmp: FileCmp::ContentMismatch,
-                });
-            },
-            Err(_) => return Err(())
-        }
+        return compare_soft_links(first_path, second_path);
     /* TODO: Other file types do not yet have support. At the moment, they are treated the same way
      * directories are: if they both exist, and are of the same type, return that they match. */
     } else {
-        return Ok(PartialFileComparison {
-            first_ft: first_filetype,
-            second_ft: second_filetype,
-            file_cmp: FileCmp::Match,
-        });
+        return Ok(FileCmp::Match);
     }
+    /* }}} */
+}
+
+
+/// A helper function for `compare_files()`. Takes two paths that point to two files of the same
+/// file type and returns a `Result` that either contains a `FileCmp` that represents how the two
+/// files (understood in the broad sense) compare in terms of their metadata or an `Err`
+/// indicating that an error occurred in the process of comparing the two files.
+///
+/// #### Parameters:
+/// * `first_metadata` the file metadata of the first file we wish to compare.
+/// * `second_metadata` the file metadata of the second file we wish to compare.
+/// #### Return:
+/// * a `FileCmp` that represents whether the two files are equivalent in terms of metadata and
+///     how they are different in this regard if they are.
+fn compare_files_compare_metadata(first_metadata: &Metadata, second_metadata: &Metadata) ->
+    Result<FileCmp, ()> {
+    /* {{{ */
+    match first_metadata.accessed() {
+        Ok(first_acc_time) => match second_metadata.accessed() {
+            Ok(second_acc_time) => {
+                match first_acc_time == second_acc_time {
+                    true => (),
+                    false => return Ok(FileCmp::MetadataAccessTimeMismatch),
+                }
+            },
+            Err(_) => return Err(()),
+        },
+        Err(_) => return Err(()),
+    };
+
+    match first_metadata.created() {
+        Ok(first_create_time) => match second_metadata.created() {
+            Ok(second_create_time) => {
+                match first_create_time == second_create_time {
+                    true => (),
+                    false => return Ok(FileCmp::MetadataCreationTimeMismatch),
+                }
+            },
+            Err(_) => return Err(()),
+        },
+        Err(_) => return Err(()),
+    };
+
+    match first_metadata.modified() {
+        Ok(first_mod_time) => match second_metadata.modified() {
+            Ok(second_mod_time) => {
+                match first_mod_time == second_mod_time {
+                    true => (),
+                    false => return Ok(FileCmp::MetadataModificationTimeMismatch),
+                }
+            },
+            Err(_) => return Err(()),
+        },
+        Err(_) => return Err(()),
+    };
+
+    return Ok(FileCmp::Match);
+    /* }}} */
+}
+
+
+/// Takes two paths and returns a `Result` that either contains a `PartialFileComparison` that
+/// represents how the two files (understood in the broad sense) pointed to by the two paths
+/// compare or an `Err` indicating that an error occurred in the process of comparing the two
+/// files.
+///
+/// #### Parameters:
+/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
+///     through command line arguments to the program.
+/// * `first_path` a file path that points to the first file we wish to compare.
+/// * `second_path` a file path that points to the second file we wish to compare.
+/// #### Return:
+/// * a `PartialFileComparison` that represents whether the two files are equivalent, if they
+///     differ and how they differ, as well as the two file types of the files.
+fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
+    Result<PartialFileComparison, ()> {
+    /* {{{ */
+
+    let mut ret_partial_cmp: PartialFileComparison;
+
+    /* 1. Compare the existence of both files */
+    match compare_files_compare_existences(first_path, second_path) {
+        Ok(existence_cmp) => {
+            ret_partial_cmp = PartialFileComparison {
+                first_ft: None,
+                second_ft: None,
+                file_cmp: existence_cmp,
+            };
+            /* If the two files did not both exist, return early */
+            match ret_partial_cmp.file_cmp {
+                FileCmp::Match => (),
+                _ => return Ok(ret_partial_cmp),
+            }
+        },
+        Err(_) => return Err(()),
+    }
+
+    /* INTERMEDIATE: Get the metadata of the two files. We will need this metadata for several
+     * types of comparisons coming up. */
+    let first_metadata;
+    let second_metadata;
+
+    match compare_files_get_metadata(first_path, second_path) {
+        Ok((first_meta, second_meta)) => {
+            first_metadata = first_meta;
+            second_metadata = second_meta;
+        }
+        Err(_) => return Err(()),
+    }
+
+    /* 2. Compare the file types of both files. */
+    let first_filetype = first_metadata.file_type();
+    let second_filetype = second_metadata.file_type();
+    /* Update the file types in our return struct now that we have them */
+    ret_partial_cmp.first_ft = Some(first_filetype);
+    ret_partial_cmp.second_ft = Some(second_filetype);
+    /* If the two paths point to files that are of different types (e.g. a directory vs. a symlink,
+     * a directory vs a regular file) then return early */
+    if first_filetype != second_filetype {
+        ret_partial_cmp.file_cmp = FileCmp::FileTypeTypeMismatch;
+        return Ok(ret_partial_cmp);
+    }
+
+    /* 3. Compare the substance of both files. */
+    match compare_files_compare_substance(first_path, &first_filetype, second_path) {
+        Ok(substance_cmp) => {
+            ret_partial_cmp.file_cmp = substance_cmp;
+            /* If the two files did not have identical substance, return early */
+            match ret_partial_cmp.file_cmp {
+                FileCmp::Match => (),
+                _ => return Ok(ret_partial_cmp),
+            }
+        },
+        Err(_) => return Err(()),
+    }
+
+    /* 3. Compare the metadata of both files. */
+    /* Comparing metadata is optional, and by default is not enabled */
+    if config.compare_metadata {
+        match compare_files_compare_metadata(&first_metadata, &second_metadata) {
+            Ok(metadata_cmp) => {
+                ret_partial_cmp.file_cmp = metadata_cmp;
+                /* If the two files did not have identical metadata, return early */
+                match ret_partial_cmp.file_cmp {
+                    FileCmp::Match => (),
+                    _ => return Ok(ret_partial_cmp),
+                }
+            },
+            Err(_) => return Err(()),
+        }
+    }
+
+    /* If we make it to this point, that means all the types of comparisons have resulted in a
+     * Match. We can return return struct. */
+    return Ok(ret_partial_cmp);
     /* }}} */
 }
 
@@ -466,6 +584,8 @@ fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileCom
 /// in the process of comparing the two directory trees.
 ///
 /// #### Parameters:
+/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
+///     through command line arguments to the program.
 /// * `first_root` a file path that points to the root directory of the first directory tree we
 ///     wish to compare.
 /// * `second_root` a file path that points to the root directory of the second directory tree we
@@ -476,7 +596,7 @@ fn compare_files(first_path: &Path, second_path: &Path) -> Result<PartialFileCom
 ///     the `Vec<FullFileComparison>`, then the caller is given a list of all the file comparisons
 ///     that were performed during the larger, directory tree comparison. If the `Result` turns out
 ///     to be an `Err`, then this function experienced some sort of error.
-fn compare_directory_trees(first_root: &Path, second_root: &Path) -> 
+fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Path) -> 
     Result<Vec<FullFileComparison>, ()> {
     /* {{{ */
 
@@ -501,7 +621,7 @@ fn compare_directory_trees(first_root: &Path, second_root: &Path) ->
         let first_path = first_root.join(e);
         let second_path = second_root.join(e);
 
-        let cmp_res = compare_files(&first_path, &second_path);
+        let cmp_res = compare_files(config, &first_path, &second_path);
 
         if cmp_res.is_ok() {
             ret.push(
@@ -526,6 +646,7 @@ fn compare_directory_trees(first_root: &Path, second_root: &Path) ->
 /// * `totals_count` a `Totals` representing running totals for a given directory tree comparison.
 /// * `p_cmp` a `PartialFileComparison` containing only the necessary the information about the 2
 ///     files that were compared.
+/// TODO: simplify this function or break it up. 99 lines is too long.
 fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
     /* {{{ */
 
@@ -640,39 +761,45 @@ fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
 fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
     /* {{{ */
     match full_comp.partial_cmp.file_cmp {
+        FileCmp::ExistenceNeitherFile => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("Neither {:?} nor {:?} exist", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::ExistenceOnlyFirstFile => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::ExistenceOnlySecondFile => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} does NOT exist, but {:?} does exist", full_comp.first_path,
+                full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::FileTypeTypeMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} is not of the same type as {:?}", full_comp.first_path,
+                full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::SubstanceRegFileContentMismatch | FileCmp::SubstanceSoftLinkLinkMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} differs from {:?}", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::MetadataAccessTimeMismatch | FileCmp::MetadataCreationTimeMismatch |
+            FileCmp::MetadataModificationTimeMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} has different metadata to {:?}", full_comp.first_path, full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
         FileCmp::Match => {
             if config.matches {
                 if config.pretty { print!("{BOLD}{GREEN}"); }
                 println!("{:?} == {:?}", full_comp.first_path, full_comp.second_path);
                 if config.pretty { print!("{NORMAL}"); }
             }
-        },
-        FileCmp::TypeMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} is not of the same type as {:?}", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::ContentMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} differs from {:?}", full_comp.first_path, full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::NeitherFileExists => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("Neither {:?} nor {:?} exist", full_comp.first_path, full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::OnlyFirstFileExists => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path, full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::OnlySecondFileExists => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} does NOT exist, but {:?} does exist", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
         },
     }
     /* }}} */
@@ -690,12 +817,10 @@ fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
 ///     Typically, this parameter is the result of a call to `compare_directory_trees()`.
 fn print_output(config: &Config, directory_tree_comparison: Result<Vec<FullFileComparison>, ()>) {
     /* {{{ */
-
     let mut totals_count = default_totals();
 
     match directory_tree_comparison {
         Ok(list) => {
-
             for e in list {
                 /* If we are going to print totals, update our totals count struct */
                 if config.totals { update_totals(&mut totals_count, &e.partial_cmp); }
@@ -771,10 +896,16 @@ fn main() {
             Arg::new("second_root_dir").required(true).index(2)
         )
         .arg(
+            Arg::new("metadata").short('d').long("metadata").num_args(0)
+        )
+        .arg(
             Arg::new("matches").short('m').long("matches").num_args(0)
         )
         .arg(
             Arg::new("pretty").short('p').long("pretty").num_args(0)
+        )
+        .arg(
+            Arg::new("silent").short('s').long("silent").num_args(0)
         )
         .arg(
             Arg::new("totals").short('t').long("totals").num_args(0)
@@ -825,15 +956,20 @@ fn main() {
 
     /* Modify the config as the commandline flags/argument require */
     if match_result.get_flag("matches") { conf.matches = true; }
+    if match_result.get_flag("metadata") { conf.compare_metadata = true; }
     if match_result.get_flag("pretty") { conf.pretty = true; }
+    if match_result.get_flag("silent") { conf.silent = true; }
     if match_result.get_flag("totals") { conf.totals = true; }
 
     /* Perform the comparison between the two directory trees, and print output for the result so
      * the user can see how the two directory trees compared */
-    let directory_tree_comparison_res = compare_directory_trees(first_dir, second_dir);
+    let directory_tree_comparison_res = compare_directory_trees(&conf, first_dir, second_dir);
     let mismatch_occurred =
         directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res);
-    print_output(&conf, directory_tree_comparison_res);
+    /* Only print any output if silent mode is off */
+    if !conf.silent {
+        print_output(&conf, directory_tree_comparison_res);
+    }
 
     /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
      * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
