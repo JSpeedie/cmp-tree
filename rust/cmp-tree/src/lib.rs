@@ -344,48 +344,59 @@ fn compare_files_compare_existences(first_path: &Path, second_path: &Path) -> Re
 
 
 /// A helper function for `compare_files()`. Takes two paths and returns a `Result` that either
-/// contains a tuple of two `Metadata`s (representing the metadata of the two files being compared)
+/// contains a tuple of two `Option<Metadata>`s (representing possibly the metadata of the two files being compared)
 /// or an `Err` indicating that an error occurred in the process of acquiring the metadata.
 ///
 /// #### Parameters:
 /// * `first_path` a file path that points to the first file whose metadata we wish to get.
 /// * `second_path` a file path that points to the second file whose metadata we wish to get.
 /// #### Return:
-/// * a `Result<(Metadata, Metadata), ()>` that either contains the metadata of the two files or
-///     an Err indicating that this function failed to get the metadata on the two files
-///     successfully.
+/// * a `Result<(Option<Metadata>, Option<Metadata>), ()>` that either contains possibly the
+///     metadata of the two files or an Err indicating that this function failed to get the
+///     metadata on the two files successfully.
 fn compare_files_get_metadata(first_path: &Path, second_path: &Path) ->
-    Result<(Metadata, Metadata), ()> {
+    Result<(Option<Metadata>, Option<Metadata>), ()> {
     /* {{{ */
 
-    let first_file_metadata_res;
-    let second_file_metadata_res;
-    let first_file_metadata: Metadata;
-    let second_file_metadata: Metadata;
+    let mut first_file_metadata: Option<Metadata> = None;
+    let mut second_file_metadata: Option<Metadata> = None;
 
-    /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks, so
-    * we need to check if the files we're looking at are symlinks and gets their metadata
-    * appropriately */
-    match first_path.is_symlink() {
-        true => first_file_metadata_res = first_path.symlink_metadata(),
-        false => first_file_metadata_res = first_path.metadata(),
-    }
-    match second_path.is_symlink() {
-        true => second_file_metadata_res = second_path.symlink_metadata(),
-        false => second_file_metadata_res = second_path.metadata(),
-    }
+    if first_path.exists() {
+        let first_file_metadata_res;
 
-    if let Ok(md) = first_file_metadata_res {
-        first_file_metadata = md;
-    } else {
-        return Err(());
+        /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks,
+         * so we need to check if the files we're looking at are symlinks and gets their metadata
+         * appropriately */
+        match first_path.is_symlink() {
+            true => first_file_metadata_res = first_path.symlink_metadata(),
+            false => first_file_metadata_res = first_path.metadata(),
+        }
+
+        if let Ok(md) = first_file_metadata_res {
+            first_file_metadata = Some(md);
+        } else {
+            return Err(());
+        }
     }
 
-    if let Ok(md) = second_file_metadata_res {
-        second_file_metadata = md;
-    } else {
-        return Err(());
+    if second_path.exists() {
+        let second_file_metadata_res;
+
+        /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks,
+         * so we need to check if the files we're looking at are symlinks and gets their metadata
+         * appropriately */
+        match second_path.is_symlink() {
+            true => second_file_metadata_res = second_path.symlink_metadata(),
+            false => second_file_metadata_res = second_path.metadata(),
+        }
+
+        if let Ok(md) = second_file_metadata_res {
+            second_file_metadata = Some(md);
+        } else {
+            return Err(());
+        }
     }
+
 
     return Ok((first_file_metadata, second_file_metadata));
     /* }}} */
@@ -512,25 +523,46 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
                 second_ft: None,
                 file_cmp: existence_cmp,
             };
-            /* If the two files did not both exist, return early */
-            match ret_partial_cmp.file_cmp {
-                FileCmp::Match => (),
-                _ => return Ok(ret_partial_cmp),
-            }
+            /* If both files don't exist at this point, we can return that they experienced a
+             * mismatch. However, so long as one of them exists, we want to get the file type of
+             * that existing file. Normally we would perform an early return here if there was a
+             * mismatch, but we will delay the return until we get the file types */
         },
         Err(_) => return Err(()),
     }
 
     /* INTERMEDIATE: Get the metadata of the two files. We will need this metadata for several
     * types of comparisons coming up. */
-    let first_metadata;
-    let second_metadata;
+    let first_metadata: Metadata;
+    let second_metadata: Metadata;
 
     match compare_files_get_metadata(first_path, second_path) {
-        Ok((first_meta, second_meta)) => {
+        /* If we were able to successfully get the metadata from both files, save the metadata
+         * and continue execution */
+        Ok((Some(first_meta), Some(second_meta))) => {
             first_metadata = first_meta;
             second_metadata = second_meta;
-        }
+        },
+        /* If we were only able to get the metadata for one file (which is what would happen if
+         * the existence comparison resulted in a mismatch), save the file type of the existing
+         * file and return early */
+        Ok((Some(first_meta), None)) => {
+            ret_partial_cmp.first_ft = Some(first_meta.file_type());
+            ret_partial_cmp.second_ft = None;
+            return Ok(ret_partial_cmp);
+        },
+        /* Same as previous comment */
+        Ok((None, Some(second_meta))) => {
+            ret_partial_cmp.first_ft = None;
+            ret_partial_cmp.second_ft = Some(second_meta.file_type());
+            return Ok(ret_partial_cmp);
+        },
+        /* Extremely unlikely edge case (should only get hit if something like a TOCTOU happens) */
+        Ok((None, None)) => {
+            ret_partial_cmp.first_ft = None;
+            ret_partial_cmp.second_ft = None;
+            return Ok(ret_partial_cmp);
+        },
         Err(_) => return Err(()),
     }
 
