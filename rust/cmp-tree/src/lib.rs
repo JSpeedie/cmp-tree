@@ -256,9 +256,16 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCm
                     if first_bytes_read == 0 && second_bytes_read == 0 {
                         return Ok(FileCmp::Match);
                     }
-                    // TODO: is this a (1) functional and (2) a correct equivalent for C++ memcmp?
+                    /* This `if` statement is very important. The comparison here, done using the
+                     * `==` operator is (as far as I understand) optimized in the same way
+                     * `memcmp()` is in C and C++. What this means is that this operation can be
+                     * vectorized (if the CPU architecture supports it) and if it is, it is a very
+                     * fast way to compare chunks of memory. To those more familiar with other
+                     * languages, this `if` statement may look flat out erroneous, but trust me, it
+                     * is actually the secret sauce behind a lot of this programs speed. */
                     if first_buf != second_buf {
-                        return Ok(FileCmp::Match);
+                    // if &first_buf[..first_bytes_read] != &second_buf[..second_bytes_read] {
+                        return Ok(FileCmp::SubstanceRegFileContentMismatch);
                     }
                 },
                 Err(_) => {
