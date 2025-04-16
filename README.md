@@ -93,6 +93,46 @@ cd rust/cmp-tree
 cargo build
 target/debug/cmp-tree [path-to-first-directory] [path-to-second-directory]
 ```
+&nbsp;
+
+### Testing
+
+This project includes a collection of directory trees that serve as input for
+tests. To make things easier for developers, I have chosen to archive each test
+as a `.tar.xz`. This means only one file is committed to the repo for each test
+which saves those working on this project from having to commit perhaps dozens
+and dozens of files for a single test that has a larger directory tree.
+
+Because the tests are all archived however, it means they cannot be used for
+testing until they have been extracted. I have 2 scripts to help with this
+archiving process.
+
+#### Extracting Tests
+
+If you aren't modifying the tests but simply want to use the pre-existing tests
+for testing, all you need to do is run the following command in the root of the
+repo:
+
+```
+bash extract_tests.sh
+```
+
+This will extract every file whose file names ends in `.tar.xz` in the `tests/`
+directory. If a directory of the same name as the `.tar.xz` file (minus its
+extension) already exists, a warning will be printed and the `.tar.xz` will not
+be extracted.
+
+#### Archiving Tests
+
+If you have modified an existing test or created a new test and want to commit
+your changes, you can use the test archiving script. Run the following from the
+root of the repo:
+
+```
+bash archive_tests.sh
+```
+
+This will archive every directory in `tests/` as a `.tar.xz`.
 
 &nbsp;
 
