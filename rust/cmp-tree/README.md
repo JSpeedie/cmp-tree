@@ -14,6 +14,7 @@ cd rust/cmp-tree
 cargo build --release
 ./install.sh
 cmp-tree [path-to-first-directory] [path-to-second-directory]
+man cmp-tree
 ```
 
 &nbsp;
