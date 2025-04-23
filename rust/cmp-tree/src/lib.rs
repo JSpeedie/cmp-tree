@@ -1,6 +1,7 @@
 use std::fs::{File,FileType,Metadata,read_link};
 use std::io::Read; // For getting the SHA256 hash of a file
 use std::path::{Path, PathBuf};
+use std::thread::{available_parallelism,scope,ScopedJoinHandle};
 
 
 #[derive(Debug)]
@@ -637,39 +638,78 @@ fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Pat
     Result<Vec<FullFileComparison>, ()> {
     /* {{{ */
 
-    let mut ret = Vec::new();
+    let mut ret: Vec<FullFileComparison> = Vec::new();
     /* Get the first directory file list and the second directory file list:
     * the list of files in each directory */
-    let first_ft = files_in_tree(first_root);
-    let second_ft = files_in_tree(second_root);
+    let first_ft: Vec<PathBuf> = files_in_tree(first_root);
+    let second_ft: Vec<PathBuf> = files_in_tree(second_root);
 
     /* Combine all the relative paths from the first and second directory roots into one combined
     * list of relative paths */
-    let mut combined_ft = Vec::new();
+    let mut combined_ft: Vec<PathBuf> = Vec::new();
     combined_ft.extend(first_ft);
     combined_ft.extend(second_ft);
     /* Sort the combined file tree and remove duplicate items */
     combined_ft.sort();
     combined_ft.dedup();
+    /* We know our return array we be at most `combined_ft` length. It will only be shorter if
+     * errors are encountered when comparing files */
+    ret.reserve(combined_ft.len());
+    /* Find out how many cores the computer has. If we fail to get that info, default to 1 thread
+     * */
+    let num_threads: usize = match available_parallelism() {
+        Ok(cores) => cores.get(),
+        _ => 1,
+    };
+    /* Calculate how many file pairs each thread needs to compare. Perform a ceiled division
+     * through manual math to make sure every element is a member of some chunk */
+    let chunk_size: usize =
+        (combined_ft.len() + num_threads - 1) / num_threads;
 
-    /* Go through all the file paths in the combined  file list, creating two full paths to the
-    * file, one rooted at `first_root`, one rooted at `second_root`, and compare them */
-    for e in &combined_ft {
-        let first_path = first_root.join(e);
-        let second_path = second_root.join(e);
+    scope(|s| {
+        let mut thread_handles: Vec<ScopedJoinHandle<'_, Vec<FullFileComparison>>> = Vec::new();
+        thread_handles.reserve(num_threads);
 
-        let cmp_res = compare_files(config, &first_path, &second_path);
+        for chunk in combined_ft.chunks(chunk_size) {
+            thread_handles.push(s.spawn(move || -> Vec<FullFileComparison> {
+                let mut ret_vec: Vec<FullFileComparison> = Vec::new();
+                ret_vec.reserve(chunk.len());
 
-        if cmp_res.is_ok() {
-            ret.push(
-                FullFileComparison {
-                    first_path: first_path,
-                    second_path: second_path,
-                    partial_cmp: cmp_res.unwrap(),
+                for file_pair in chunk {
+                    /* Go through all the file pairs assigned to this thread, creating two full
+                     * paths to the file, one rooted at `first_root`, one rooted at `second_root`,
+                     * and compare them */
+                    let first_file = first_root.join(file_pair);
+                    let second_file = second_root.join(file_pair);
+
+                    let cmp_res = compare_files(config, &first_file, &second_file);
+
+                    if cmp_res.is_ok() {
+                        ret_vec.push(
+                            FullFileComparison {
+                                first_path: first_file,
+                                second_path: second_file,
+                                partial_cmp: cmp_res.unwrap(),
+                            }
+                        );
+                    }
                 }
-            );
+
+                return ret_vec;
+            }));
         }
-    }
+        /* Join all threads in order of creation */
+        for handle in thread_handles.into_iter() {
+            match handle.join() {
+                /* If the thread succeeded, go through its `ret_vec` and copy all its contents
+                 * `ret` */
+                Ok(ret_list) => {
+                    ret.extend(ret_list);
+                },
+                _ => (),
+            }
+        }
+    });
 
     return Ok(ret);
     /* }}} */
