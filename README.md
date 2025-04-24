@@ -7,6 +7,15 @@ This repo contains multiple different implementations of the same program:
 `tree`, allowing you to compare the full contents of two directories and find
 any disparities.
 
+#### Primary Implementation
+
+Please note that if you are simply looking for a `cmp-tree` binary to run as a
+fast, trustworthy tool, all you need to look at is the Rust implementation. The
+Rust implementation was chosen as the primary implementation which means it is
+the one that has received (and will continue to receive) more work so as to
+have a well-functioning commandline tool at the end of this project, rather
+than just a collection of incomplete implementations.
+
 <details><summary><i>Example (Click to expand)</i></summary>  
 Let's say we're in a directory that itself contains two example directories:
 
@@ -94,11 +103,22 @@ make
 
 ### Testing
 
-This project includes a collection of directory trees that serve as input for
-tests. To make things easier for developers, I have chosen to archive each test
-as a `.tar.xz`. This means only one file is committed to the repo for each test
-which saves those working on this project from having to commit perhaps dozens
-and dozens of files for a single test that has a larger directory tree.
+At the time of writing, only the Rust implementation of `cmp-tree` has tests
+you can run to verify its correctness. This is because the Rust implementation
+was chosen as the primary implementation.
+
+This project includes a collection of test inputs (located in `./tests`) that
+are used in the Rust tests but can also be used by the other implementations if
+at some point it is decided to add tests for those. Keep in mind that the
+number of test /inputs/ is not representative of how many /tests/ there are.
+Each test input (and sometimes only parts of each test input) is reused
+multiple times for various tests.
+
+It is also worth explaining why all the tests appear in the repo as `.tar.xz`
+files. This decision to store the test inputs in an archived form was done oo
+make things easier for developers. Archiving a test input means committing only
+one file per test, rather than possibly dozens of files (for larger directory
+trees) per test.
 
 Because the tests are all archived however, it means they cannot be used for
 testing until they have been extracted. I have 2 scripts to help with this
@@ -107,14 +127,14 @@ archiving process.
 #### Extracting Tests
 
 If you aren't modifying the tests but simply want to use the pre-existing tests
-for testing, all you need to do is run the following command in the root of the
-repo:
+for testing, all you need to do is run the following command in the root of
+your local copy of the repo:
 
 ```
 bash extract_tests.sh
 ```
 
-This will extract every file whose file names ends in `.tar.xz` in the `tests/`
+This will extract every file whose file name ends in `.tar.xz` in the `tests/`
 directory. If a directory of the same name as the `.tar.xz` file (minus its
 extension) already exists, a warning will be printed and the `.tar.xz` will not
 be extracted.
@@ -146,23 +166,24 @@ with the corresponding file on the healthy backup.
 ### Why are There Multiple Implementations?
 
 The long story short is that `cmp-tree` has served as a project for
-self-directed exploration and learning focused on systems-level languages and
-development and scripting languages. In other words, it has allowed me to learn
-more about systems-level development in general. Some of the questions or topics
-I wanted to explore as various points throughout this project were:
+self-directed exploration and learning broadly focused on development and
+performance differences between languages. Ultimately, it has been most useful
+as an opportunity to learn more about systems-level development in general.
+Some of the questions or topics I wanted to explore as various points
+throughout this project were:
 
 1. The performance differences between Bash and C/C++/Rust
-2. How certain objects (like `std::string` and `std::vector`) are implemented
-   in C++
+2. Some details about how certain objects (like `std::string` and
+   `std::vector`) are implemented in C++
 3. What it's like developing in C compared to more modern systems-level
    languages like C++/Rust
 4. What it's like writing in a very modern language like Rust compared to C++
-5. How to profile a program
+5. The basics of program profiling
 6. How to program in Rust more generally
     * How do you efficiently read from a file?
     * How do you read file metadata?
     * How do you make a commandline application in Rust that takes commandline arguments?
-    * How do you handle error reporting in your code?
+    * How might you handle error reporting in your Rust program?
     * How do you add tests to your project in Rust?
     * How do you write multithreaded code in Rust?
 
@@ -446,17 +467,18 @@ that generates a giant file using something like `/dev/random` and then simply
 etc. Done this way, the repository can store a simple script rather than a
 giant file, although this approach comes with its own risks too, of course.
 
-Regardless, as of writing this, I have 10 fairly simple integration tests that
-should catch any egregious bugs in the program. Next I plan to write some
-unit-tests for the Rust functions that do all the heavy lifting to help me
-catch less significant bugs. I also would like to figure out how to make tests
-that allow me to test if `cmp-tree` can catch differences in file metadata. As
-I understand it right now, `tar` doesn't preserve file metadata, nor does it
-preserve permissions in the way I need it to (because it's impossible;
-different computers have different users), and so I need to figure out a way to
-create such tests first. One idea I'm considering that I've already hinted at
-is having a script in each test directory that does any necessary setup work
-for the test, including, perhaps setting the permissions and file metadata.
+Regardless, as of writing this, I have 10 fairly simple integration tests and
+16 unit tests that should catch any egregious bugs in the program. Next I plan
+to write unit tests for some of the mid-level Rust functions as at the moment,
+most of the unit testing thoroughly examines some of the highest level
+functions. I also would like to figure out how to make tests that allow me to
+test if `cmp-tree` can catch differences in file metadata. As I understand it
+right now, `tar` doesn't preserve file metadata, nor does it preserve
+permissions in the way I need it to (because it's impossible; different
+computers have different users), and so I need to figure out a way to create
+such tests first. One idea I'm considering that I've already hinted at is
+having a script in each test directory that does any necessary setup work for
+the test, including, perhaps setting the permissions and file metadata.
 
 #### Part 7: Continued Work: Multithreading the Rust Implementation
 
@@ -466,29 +488,30 @@ this project complete. I accomplished my various goals for learning more about
 systems-level development and in the process had built a tool for my purposes
 better than what was already available on my system. That said, I knew that
 there was room to grow for whatever implementation I decided would be the
-primary. None of the implementations had any testing, most of them had at least
-1 or 3 known (minor) bugs, most of them had no method for installing them for
-all users on a computer (which would be nice if I actually intended to use this
-tool at all), and only one of the implementations was multithreaded. Since I
-wanted to get Rust experience and the Rust implementation was not only the most
-fun to write but also the best performing, I decided I wanted to put some more
-work into the Rust version of `cmp-tree`.
+primary. Most of the implementations had no testing and the only one that did
+(the Rust implementation) had very limited testing (only 10 simple integration
+tests!), most of them had at least 1 or 3 known (minor) bugs, most of them had
+no method for installing them for all users on a computer (which would be nice
+if I actually intended to use this tool at all), and only the C implementation
+was multithreaded. Since I wanted to get Rust experience and the Rust
+implementation was already the primary implementation, I decided to see if I
+could multithread it as a means to improve performance.
 
 It didn't take me very long to multithread the Rust implementation and I can
-confidently say that that was the best experience I have had multithreading a
-program ever. As it goes with Rust, I had to figure out if Rust allowed for the
-sort of behaviour I wanted to achieve (it did) and then how to actually
-implement such behaviour in this language that I'm still new to. The good news
-is that it didn't take much research, and once that was done, it was very, very
-quick to implement. Most importantly however, I knew (unlike with my past
-multithreading efforts in C) that my multithreaded Rust code wouldn't make
-common multithreading mistakes like having two threads use overlapping slices
-of an array as their input because Rust wouldn't have compiled that code.
-Honestly, the first time the multithreaded Rust implementation compiled, it
-passed all the tests I had at the time. That was only 10 tests, but coming from
-my limited multithreading experience in C, I was expecting the majority of test
-cases to fail because my code would have some off-by-one error that led to
-erroneous data or something similar.
+confidently say that doing so was the best experience I have had multithreading
+a program ever. As it goes with Rust, I had to figure out if Rust allowed for
+the sort of behaviour I wanted to achieve (it did) and then also figure out how
+to actually implement such behaviour in this language that I'm still new to.
+The good news is that it didn't take much research, and once that was done, it
+was very, very quick to implement. Most importantly however, I knew (unlike
+with my past multithreading efforts in C) that my multithreaded Rust code
+wouldn't make common multithreading mistakes like having two threads use
+overlapping slices of an array as their input because Rust wouldn't have
+compiled such code. Honestly, the first time the multithreaded Rust
+implementation compiled, it passed all the tests I had at the time. That was
+only 10 integration tests, but coming from my limited multithreading experience
+in C, I was expecting the majority of test cases to fail because my code would
+have some off-by-one error that led to erroneous data or something similar.
 
 Time and time again in Rust I find that I have to pay an upfront cost of doing
 research on how to accomplish the behaviour I want to achieve in a way that
@@ -496,9 +519,9 @@ Rust will allow, but that this pays off in the end by saving me from what could
 be tonnes of time spent debugging a compiling but broken build. Having a
 compiler catch a problem before your program ever even runs is one of the
 reasons I like compiled languages in general. Rust just takes it a step further
-than most compiled languages, and through its comprehensive rules catches more
-problems. As I see it, I'm a bit surprised it's taken so long to get a language
-like Rust, but nonetheless I'm grateful it exists now!
+than most compiled languages, and through its comprehensive rules it catches
+more problems. As I see it, I'm a bit surprised it's taken so long to get a
+language like Rust, but nonetheless I'm grateful it exists now!
 
 
 &nbsp;
@@ -511,31 +534,28 @@ around to all or even some of these remains to be seen, but I'll lay them out
 here nonetheless.
 
 1. Write a Python implementation of `cmp-tree`
-    * I saw some methods in some Python libraries I used that would've made
+    * I've seen some methods in some Python libraries that would've made
       writing `cmp-tree` much simpler than it was in any of the languages I
       have written the program in so far, except for Bash. I am thinking that
       in the future, outside of the most basic of scripts, I would like to use
       Python for scripting instead of Bash. Bash is just a mess, and while I'm
       not a big Python fan, it has infinitely better support for arrays among
       many, many other advantages! I am also curious to see how a similar
-      implementation would perform in Python. Given that my original Bash
-      implementation was around as fast as my first `fork()` -> `exec(cmp)`
-      implementation, maybe the Python performance won't be that far from the
-      Rust implementation.
-2. Make the Rust implementation multithreaded
-    * I think the next thing for me to do in Rust (in general) is
-      multithreading. Personally, I think multithreading might make the utility
-      worse (since I think it will be less efficient in terms of actual CPU
-      time) but I think when learning systems-level languages, you need to know
-      how to multithread in the language you're learning, and as such I need to
-      give it a go at some point. I also recognize that a multithreaded option,
-      while perhaps slower when measured in total CPU time, would, on a normal,
-      single-user computer, run faster in real-world time, and giving users the
-      choice between a multithreaded execution and a single-threaded execution
-      might be a good idea.
-        * The Rust implementation of `cmp-tree` currently is multithreaded,
-          although it does not provide an option to choose between
-          multithreaded execution and single-threaded.
+      implementation would perform in Python. Given that one of the bigger
+      bottlenecks for a program like `cmp-tree` that I've found so far was
+      forking and then running `cmp` and that I now know that and can simply
+      not make the same mistake again in Python, maybe the Python performance
+      will be surprisingly good!
+2. Add a commandline option to the Rust version to limit the program to single
+   thread execution.
+    * As I mentioned in the Project Report, I think multithreading is very
+      often a trade-off. You trade increased CPU time for less real-world,
+      clock time. For this reason, I think it makes sense to have an option for
+      users to force `cmp-tree` to run in single-threaded mode in case it is
+      going to be run on a busy server, a battery powered device, or in some
+      other situation where reducing the total amount of CPU work is more
+      important than the real-world time savings to be gained from
+      multithreading.
 3. Talk about the perfomance of `cmp-tree` versus alternatives in the Project
    Report
     * While this project served (and continues to serve) mostly as a learning
@@ -546,13 +566,17 @@ here nonetheless.
       -qr`, I knew there was some optimizing to be done. However, since I wrote
       my own file comparison function that uses `memcmp()` (or some
       equivalent), my program has been faster than `diff -qr` by a modest
-      margin. 
-4. Add support for files of all formats in Rust version
-    * Currently the Rust implementation (and all the other implementations for
-      that sake) only support directory trees comprised solely of directories
-      and normal files. Pipes, links, and other forms of files that appear on
-      Linux (the only OS I intend for this project to support) have no support
-      yet. This, and the lack of a substantial testing suite are what prevent
-      me from using `cmp-tree` for important tasks.
-        * The Rust implementation of `cmp-tree` currently supports regular
-          files, directories, and soft links.
+      margin. It would be nice to see some graphs that show the progress trend
+      of my speed of all my implementations.
+4. Add support for files of all formats in Rust version?
+    * Currently the Rust implementation supports directory trees comprised
+      solely of regular files, directories and soft links. Pipes, character
+      devices, sockets, and other forms of files that appear on Linux (the only
+      OS I intend for this project to support) have no support yet. I still
+      have to decide if `cmp-tree` needs to support more than regular files,
+      directories, and soft links, but maybe it should.
+5. Optimize the Rust implementation further!
+    * I'd love to make the primary implementation even faster! Right now I'm
+      not sure what I could do to speed up the program further but I'm sure
+      down the road I'll remember optimizations I currently can't recall or
+      I'll learn about new ways to profile, or new methods for optimization.
