@@ -5,6 +5,8 @@
 This is the Rust implementation of `cmp-tree`. The program compares two
 directory trees telling you if they are identical.
 
+The Rust implementation is multithreaded.
+
 &nbsp;
 
 ### Installation and Running
