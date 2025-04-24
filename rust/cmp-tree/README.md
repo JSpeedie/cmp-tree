@@ -23,13 +23,13 @@ man cmp-tree
 
 ### Testing
 
-```
+```bash
 cargo test
 ```
 
 Or if you only want to run one test suite at a time:
 
-```
+```bash
 cargo test --test integration_tests
 cargo test unit_tests
 # This project has no doc tests at the moment, but here's the command for
