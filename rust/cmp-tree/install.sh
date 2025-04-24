@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 GLOBAL_INSTALL="/usr/local/bin/"
 LOCAL_INSTALL="/usr/local/bin/"
 MAN_INSTALL="/usr/share/man/man1/"
