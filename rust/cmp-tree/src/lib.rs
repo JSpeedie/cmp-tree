@@ -1,10 +1,11 @@
+use std::cmp::Ordering;
 use std::fs::{File,FileType,Metadata,read_link};
 use std::io::Read; // For getting the SHA256 hash of a file
 use std::path::{Path, PathBuf};
 use std::thread::{available_parallelism,scope,ScopedJoinHandle};
 
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq,Eq,PartialOrd,Ord)]
 enum FileCmp {
     /* (1) For Existence Comparisons */
     /* For when neither of the two files (understood in the broad sense) exist. */
@@ -34,15 +35,66 @@ enum FileCmp {
 }
 
 
-#[derive(Debug)]
-struct PartialFileComparison {
-    file_cmp: FileCmp,
-    first_ft: Option<FileType>,
-    second_ft: Option<FileType>,
+#[derive(Debug,PartialEq,Eq,Clone,PartialOrd,Ord)]
+enum SimpleFileType {
+    RegFile,
+    Directory,
+    SoftLink,
 }
 
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq,Eq,PartialOrd)]
+struct PartialFileComparison {
+    file_cmp: FileCmp,
+    first_ft: Option<SimpleFileType>,
+    second_ft: Option<SimpleFileType>,
+}
+
+
+impl Ord for PartialFileComparison {
+    /* {{{ */
+    fn cmp(&self, other: &Self) -> Ordering {
+        /* Compare the `file_cmp` member. If that comparison returns a `Less` or `Greater`
+         * Ordering, our work is done, otherwise proceed to compare the next member */
+        match (&(self.file_cmp)).cmp(&(other.file_cmp)) {
+            Ordering::Less => return Ordering::Less,
+            Ordering::Greater => return Ordering::Greater,
+            Ordering::Equal => {
+                /* Provide a closure for calculating the "value" of a given
+                 * `Option<SimpleFileType>` */
+                let calculate_ft_value = |input: &Option<SimpleFileType>| {
+                    match &input {
+                        None => return 0,
+                        Some(ft) => match ft {
+                            SimpleFileType::RegFile => return 1,
+                            SimpleFileType::Directory => return 2,
+                            SimpleFileType::SoftLink => return 3,
+                        }
+                    }
+                };
+
+                /* Compare the `first_ft` member. If that comparison returns a `Less` or `Greater`
+                 * Ordering, our work is done, otherwise proceed to compare the next member */
+                match calculate_ft_value(&(self.first_ft))
+                    .cmp(&calculate_ft_value(&(other.first_ft))) {
+
+                    Ordering::Less => return Ordering::Less,
+                    Ordering::Greater => return Ordering::Greater,
+                    Ordering::Equal => {
+                        /* Compare the `second_ft` member. Since this is the last member to compare,
+                         * return whatever it evaluates to. */
+                        return calculate_ft_value(&(self.second_ft))
+                            .cmp(&calculate_ft_value(&(other.second_ft)));
+                    }
+                }
+            }
+        }
+    }
+    /* }}} */
+}
+
+
+#[derive(Debug,PartialEq,Eq,PartialOrd,Ord)]
 struct FullFileComparison {
     partial_cmp: PartialFileComparison,
     first_path: PathBuf,
@@ -128,10 +180,35 @@ fn default_totals() -> Totals {
 }
 
 
-/// Returns an unsorted vector list of relative file paths for all files (in the broad sense of the
-/// word, including links and directories, as well as hidden files) in a directory tree rooted at
-/// the directory pointed to by the path `root` / `extension`. The file paths included in the
-/// list will all begin with `extension`, but not `root`.
+/// Takes a `std::fs::FileType` and maps it to a `SimpleFileType` if possible.
+///
+/// #### Parameters:
+/// * `fs_filetype` the `std::fs::FileType` we wish to map to a `SimpleFileType`.
+/// #### Return:
+/// * a `SimpleFileType` representing one of the file types this library supports on success, and
+///     on error, a unit type (`()`).
+fn fs_filetype_to_simplefiletype(fs_filetype: &FileType) -> Result<SimpleFileType, ()> {
+    /* {{{ */
+    if fs_filetype.is_file() {
+        return Ok(SimpleFileType::RegFile);
+    } else if fs_filetype.is_dir() {
+        return Ok(SimpleFileType::Directory);
+    } else if fs_filetype.is_symlink() {
+        return Ok(SimpleFileType::SoftLink);
+    } else {
+        return Err(());
+    }
+    /* }}} */
+}
+
+
+/// Intended as a helper function for `files_in_tree()`. Returns an unsorted vector list of
+/// relative file paths for all files (in the broad sense of the word, including links and
+/// directories, as well as hidden files) in a directory tree rooted at the directory pointed to by
+/// the path `root` / `extension`. The file paths included in the list will all begin with
+/// `extension`, but not `root`. This function is recursive, and it is often made use of by calling
+/// it with `root` as a path to a directory that roots a directory tree and with `extension`
+/// set to an empty ("") path.
 ///
 /// #### Parameters:
 /// * `root` the beginning of the file path to the directory for which we wish to get a list of
@@ -139,7 +216,7 @@ fn default_totals() -> Totals {
 ///      complete path.
 /// * `extension` the end of the file path to the directory for which we wish to get a list of all
 ///     the files in the directory tree. It will be combined with `root` to produce the complete
-///     path.
+///     path. `extension` can be an empty path.
 /// #### Return:
 /// * an unsorted vector list of the relative file paths for all the files in the directory tree
 ///     rooted at `root` / `extension`. The file paths included in the list will omit `root` from
@@ -417,23 +494,20 @@ fn compare_files_get_metadata(first_path: &Path, second_path: &Path) ->
 /// #### Return:
 /// * a `FileCmp` that represents whether the two files are equivalent in terms of substance and
 ///     how they are different in this regard if they are.
-fn compare_files_compare_substance(first_path: &Path, representative_filetype: &FileType,
+fn compare_files_compare_substance(first_path: &Path, representative_filetype: SimpleFileType,
     second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
 
     /* TODO: The substance of directories are currently evaluated as being a match simply if both
     * directories exist. I'm not sure if there's anything else to evaluate with directories */
-    if representative_filetype.is_dir() {
-        return Ok(FileCmp::Match);
-    } else if representative_filetype.is_file() {
-        return compare_regular_files(first_path, second_path);
-    } else if representative_filetype.is_symlink() {
-        /* Call the soft link specific comparison function and return accordingly */
-        return compare_soft_links(first_path, second_path);
-    /* TODO: Other file types do not yet have support. At the moment, they are treated the same way
-    * directories are: if they both exist, and are of the same type, return that they match. */
-    } else {
-        return Ok(FileCmp::Match);
+    match representative_filetype {
+        SimpleFileType::Directory => return Ok(FileCmp::Match),
+        SimpleFileType::RegFile => return compare_regular_files(first_path, second_path),
+        SimpleFileType::SoftLink => return compare_soft_links(first_path, second_path),
+        /* TODO: No other file types have support. At the moment, the commented out line below
+         * would have them treated the same way directories are: if they both exist, and are of the
+         * same type, return that they match. */
+        // _ => return Ok(FileCmp::Match),
     }
     /* }}} */
 }
@@ -548,14 +622,24 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
          * the existence comparison resulted in a mismatch), save the file type of the existing
          * file and return early */
         Ok((Some(first_meta), None)) => {
-            ret_partial_cmp.first_ft = Some(first_meta.file_type());
+            match fs_filetype_to_simplefiletype(&first_meta.file_type()) {
+                Ok(ft) => ret_partial_cmp.first_ft = Some(ft),
+                /* If we weren't able to get a `SimpleFileType` for the first file, return early
+                 * with an error */
+                Err(_) => return Err(()),
+            }
             ret_partial_cmp.second_ft = None;
             return Ok(ret_partial_cmp);
         },
         /* Same as previous comment */
         Ok((None, Some(second_meta))) => {
             ret_partial_cmp.first_ft = None;
-            ret_partial_cmp.second_ft = Some(second_meta.file_type());
+            match fs_filetype_to_simplefiletype(&second_meta.file_type()) {
+                Ok(ft) => ret_partial_cmp.second_ft = Some(ft),
+                /* If we weren't able to get a `SimpleFileType` for the second file, return early
+                 * with an error */
+                Err(_) => return Err(()),
+            }
             return Ok(ret_partial_cmp);
         },
         /* Extremely unlikely edge case (should only get hit if something like a TOCTOU happens) */
@@ -571,17 +655,30 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
     let first_filetype = first_metadata.file_type();
     let second_filetype = second_metadata.file_type();
     /* Update the file types in our return struct now that we have them */
-    ret_partial_cmp.first_ft = Some(first_filetype);
-    ret_partial_cmp.second_ft = Some(second_filetype);
+    ret_partial_cmp.first_ft =
+        match fs_filetype_to_simplefiletype(&first_filetype) {
+            Ok(ft) => Some(ft),
+            Err(_) => None,
+        };
+    ret_partial_cmp.second_ft =
+        match fs_filetype_to_simplefiletype(&second_filetype) {
+            Ok(ft) => Some(ft),
+            Err(_) => None,
+        };
     /* If the two paths point to files that are of different types (e.g. a directory vs. a symlink,
-    * a directory vs a regular file) then return early */
-    if first_filetype != second_filetype {
+     * a directory vs a regular file) then return early */
+    if ret_partial_cmp.first_ft != ret_partial_cmp.second_ft {
         ret_partial_cmp.file_cmp = FileCmp::FileTypeTypeMismatch;
         return Ok(ret_partial_cmp);
     }
 
     /* 3. Compare the substance of both files. */
-    match compare_files_compare_substance(first_path, &first_filetype, second_path) {
+    /* We know the unwrap call won't fail because of the large match statement above will return
+     * early on any case where it was not able to get a `SimpleFileType` representation of both
+     * files' file types. */
+    match compare_files_compare_substance(first_path, ret_partial_cmp.first_ft.clone().unwrap(),
+        second_path) {
+
         Ok(substance_cmp) => {
             ret_partial_cmp.file_cmp = substance_cmp;
             /* If the two files did not have identical substance, return early */
@@ -729,79 +826,64 @@ fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
 
     /* First we determine how the given PartialFileComparison should affect the max file,
     * directory, etc. match counts in the Totals struct */
-    match p_cmp.first_ft {
-        Some(f_ft) => {
-            if f_ft.is_dir() {
-                totals_count.max_dir_matches += 1;
-            } else {
-                match p_cmp.second_ft {
-                    Some(s_ft) => {
-                        if s_ft.is_dir() {
-                            totals_count.max_dir_matches += 1;
-                        }
+    match &p_cmp.first_ft {
+        Some(f_ft) => match f_ft {
+            SimpleFileType::Directory => totals_count.max_dir_matches += 1,
+            _ => {
+                match &p_cmp.second_ft {
+                    Some(s_ft) => match s_ft {
+                        SimpleFileType::Directory => totals_count.max_dir_matches += 1,
+                        _ => (),
                     },
                     None => (),
                 }
             }
         },
+        None => match &p_cmp.second_ft {
+            Some(s_ft) => match s_ft {
+                SimpleFileType::Directory => totals_count.max_dir_matches += 1,
+                _ => (),
+            },
+            None => (),
+        },
+    }
+    match &p_cmp.first_ft {
+        Some(f_ft) => match f_ft {
+            SimpleFileType::RegFile => totals_count.max_file_matches += 1,
+            _ => match &p_cmp.second_ft {
+                Some(s_ft) => match s_ft {
+                    SimpleFileType::RegFile => totals_count.max_file_matches += 1,
+                    _ => (),
+                },
+                None => (),
+            }
+        },
         None => {
-            match p_cmp.second_ft {
-                Some(s_ft) => {
-                    if s_ft.is_dir() {
-                        totals_count.max_dir_matches += 1;
-                    }
+            match &p_cmp.second_ft {
+                Some(s_ft) => match s_ft {
+                    SimpleFileType::RegFile => totals_count.max_file_matches += 1,
+                    _ => (),
                 },
                 None => (),
             }
         },
     }
-    match p_cmp.first_ft {
-        Some(f_ft) => {
-            if f_ft.is_file() {
-                totals_count.max_file_matches += 1;
-            } else {
-                match p_cmp.second_ft {
-                    Some(s_ft) => {
-                        if s_ft.is_file() {
-                            totals_count.max_file_matches += 1;
-                        }
-                    },
-                    None => (),
-                }
-            }
-        },
-        None => {
-            match p_cmp.second_ft {
-                Some(s_ft) => {
-                    if s_ft.is_file() {
-                        totals_count.max_file_matches += 1;
-                    }
+    match &p_cmp.first_ft {
+        Some(f_ft) => match f_ft {
+            SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
+            _ => match &p_cmp.second_ft {
+                Some(s_ft) => match s_ft {
+                    SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
+                    _ => (),
                 },
                 None => (),
             }
         },
-    }
-    match p_cmp.first_ft {
-        Some(f_ft) => {
-            if f_ft.is_symlink() {
-                totals_count.max_softlink_matches += 1;
-            } else {
-                match p_cmp.second_ft {
-                    Some(s_ft) => {
-                        if s_ft.is_symlink() {
-                            totals_count.max_softlink_matches += 1;
-                        }
-                    },
-                    None => (),
-                }
-            }
-        },
         None => {
-            match p_cmp.second_ft {
-                Some(s_ft) => {
-                    if s_ft.is_symlink() {
-                        totals_count.max_softlink_matches += 1;
-                    }
+            match &p_cmp.second_ft {
+                Some(s_ft) => match s_ft {
+                    SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
+                    _ => (),
                 },
                 None => (),
             }
@@ -810,15 +892,11 @@ fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
 
     /* Second, we determine how the given PartialFileComparison should affect the actual file,
     * directory, etc. match counts in the Totals struct */
-    match p_cmp.file_cmp {
-        FileCmp::Match => {
-            if p_cmp.first_ft.unwrap().is_file() {
-                totals_count.file_matches += 1;
-            } else if p_cmp.first_ft.unwrap().is_dir() {
-                totals_count.dir_matches += 1;
-            } else if p_cmp.first_ft.unwrap().is_symlink() {
-                totals_count.softlink_matches += 1;
-            }
+    match &p_cmp.file_cmp {
+        FileCmp::Match => match p_cmp.first_ft.clone().unwrap() {
+            SimpleFileType::RegFile => totals_count.file_matches += 1,
+            SimpleFileType::Directory => totals_count.dir_matches += 1,
+            SimpleFileType::SoftLink => totals_count.softlink_matches += 1,
         },
         /* If the file comparison is anything but a match, do nothing to the totals */
         _ => (),
