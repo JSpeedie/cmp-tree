@@ -97,8 +97,33 @@ diff_tests() {
 }
 
 
+rsync_tests() {
+	# {{{
+	echo "Running rsync $num_calls times..."
+	start=$(date +%s.%N)
+
+	for i in $(seq $num_calls); do
+		# It's important to note a couple things about the rsync command used
+		# here: First, the command does not exit with a non-zero exit code if
+		# there are any differences in the two directory trees. Second, you
+		# must end the path to the directories that root each directory tree
+		# with a "/".
+		rsync -nrvc --delete kingston1/ kingston2/ &> /dev/null
+	done
+
+	end=$(date +%s.%N)
+	total_execution_time=$(echo "$end - $start" | bc -l)
+	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+
+	echo "rsync: $num_calls calls took a total of ${total_execution_time}s"
+	echo "rsync: On average, each execution took ${average_execution_time}s"
+	# }}}
+}
+
+
 # bash_tests
-# cpp_tests
-# c_tests
+cpp_tests
+c_tests
 rust_tests
 diff_tests
+rsync_tests
