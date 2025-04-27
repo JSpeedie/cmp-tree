@@ -523,6 +523,113 @@ than most compiled languages, and through its comprehensive rules it catches
 more problems. As I see it, I'm a bit surprised it's taken so long to get a
 language like Rust, but nonetheless I'm grateful it exists now!
 
+#### Part 8: Profiling for Further Improvements
+
+One thing I wanted to learn more about through this project was profiling.
+After changing my file comparison code to use `memcmp()` (or an equivalently
+fast memory comparison option) and adding multithreading, I wasn't quite sure
+how to improve the performance of the program next. I had one idea for
+optimizing which is to have `cmp-tree` do its comparisons
+directory-by-directory. By this I mean modifying `cmp-tree` so that when it is
+going through a directory tree, it would get the list of files in the current
+directory its in and compare those files *before* recursing further. This
+differs from how `cmp-tree` worked at this point where it would recurse through
+the full first and second directory trees to create two full file trees before
+combining them into one giant unique file list which `cmp-tree` would finally
+loop through, performing all the file comparisons. The thought behind this
+alternative approach is that since it would access files to generate the file
+list and then almost immediately actually compares the files, the disk accesses
+the program performs over its runtime will be for data that is closer together
+on the disk, speeding up the disk I/O which should be the slowest form of
+significant data access in the program. I talk more about this alternative
+approach in the Next Steps section, but for now it's worth noting (1) that it
+was the next big optimization idea I had at the time, (2) that it would be a
+lot of work, more than almost any other optimization I had implemented so far
+or might reasonably be willing to do in the future, and (3) that I wasn't sure
+this alternative approach to the program would actually make the program
+execute faster.
+
+Because I wasn't certain that this fundamentally different approach to the
+program would yield performance gains, I decided I would look elsewhere for
+optimization. Of course, this meant profiling. I first used `perf stat -d` to
+check the performance counters. Branch misses were excellent, about 0.7%. L1
+cache misses were not great, about 10%. L3 cache misses were excellent, about
+0.3%. The standout piece of data however was the fact that given that
+`cmp-tree` would auto-determine how many cores were on the machine it was
+running on and create 1 thread per core, on my 16 core machine I was getting
+~1.8 CPUs utilized. Better than single-threaded, but that is woefully poor CPU
+usage by each thread on average. Originally I didn't notice this metric and I
+thought that perhaps L1 cache misses were something I could look into
+optimizing. It's possible that the bad CPU utilization stat is inflated by
+other factors, but it's too terrible a number to not investigate.
+
+I decided I maybe wanted some more info on cache performance so I ran a `perf
+state -e` command asking for more information about cache misses and
+references. It mentioned that about 8% of all cache refs missed. Something to
+keep in mind.
+
+Next I used `callgrind` to take a look at the call graph and which functions
+were eating up the greatest portions of the total CPU time the program used. I
+found that the majority of CPU time (~54%) was spent comparing bytes from
+files, with only a small percentage (~8%) of run time spent reading the files.
+This also surprised me since I thought this program could be really disk I/O
+heavy and that on the right input, disk I/O would contribute a significant
+amount to total CPU time.
+
+After checking the `callgrind` call graph, I profiled the memory usage of
+`cmp-tree` using `heaptrack`. Again, to my surprise I found that `PathBuf`s and
+`Path`s were using a lot more memory than I thought they would. Not as much as
+`readdir`, but I already call `readdir` only once for every file across
+both directory trees. Perhaps if I switched `cmp-tree` to the aforemention
+alternative, directory-by-directory approach, I could simply print the output
+as each comparison is performed and then reuse *one* `PathBuf`/`Path` per
+thread, allowing me to remove the `first_path` and `second_path` members from
+the `FullFileComparison` struct.
+
+I also used `strace`, specifically with its `-r` flag to see how long my
+program was spending in each syscall it called. At the time that's what I
+thought the numbers added by the `-r` flag meant, but it turns out the `-r`
+just tells you the gap in time between the previous syscall and the one it is
+currently entering. These gaps can be helpful, but it's not what I was looking
+for. This misunderstanding led to me seeing nothing particularly out of the
+ordinary to me in the output of `strace` except for what I thought were a rare
+few 9x-slower-than-the-rest `statx()` calls (in retrospect, it's not clear
+these calls were slow at all! There may have just been a moderate delay between
+their calling and the previously called syscall). That said, it did seem
+strange to me that among the close to 1000 lines of output my original `strace
+-r` call generated, there were only 16 lines about `read()` when my program
+obviously spends a lot of time reading from files (when the directory trees
+contain lots of mostly-similar regular files, which the input I was giving it
+did). This made me think `strace` was not going to be helpful for me. I would
+later find out two things about calling `strace` that would change that
+opinion. First, I found out that the `-r` flag was not giving me the
+information I thought it was, and to actually get the amount of time each
+syscall took to complete, I needed to use the `-T` flag instead. Next, I found
+out that in order to get syscall info on all the threads created by my program
+I need to give `strace` an additional flag: `-ff`. Running `strace -ff -T` gave
+me 95,000 lines of output, **81,000** of which were `read()` calls! Now that
+seems more correct. I also found one `futex()` call that took 0.81 seconds to
+complete. I didn't know if that was unreasonable for that syscall, but I did
+know that the average syscall in the program took closer to 0.000004 seconds.
+All said and done, my main takeaways were (1) that perhaps I can play with the
+read size of my read calls in order to improve performance. 81,000 out of
+95,000 is a dominating presence from `read()`. Maybe that's fine, but perhaps
+the startup and finishing costs of the read syscall could be adding up
+needlessly, and fewer biggers reads could be a good idea. Further still, maybe
+the first read could read quite a small number of bytes (to quickly catch files
+that differ in the first few bytes) and increase the read size for following
+read calls we become increasing confident that the files will match.
+
+In short, I learned a lot about profiling and related tools such as `perf`,
+`heaptrack` and `strace`, but the direction to take my optimization in next
+isn't perfectly clear. Perhaps the best idea for optimization is at the moment
+is pipelining. This was something I hadn't heard much about prior to this
+profiling stint, but I recently learned that the producer-consumer model is a
+common approach for pipelining processing files. Intuitively it could reduce
+the wait time each thread currently incurs when they attempt to read from a
+file before comparing the read contents. It would be a fair amount of work
+implementing it, but I think that's the next direction I'll take this project.
+I'm looking forward to it! Hopefully it pays off!
 
 &nbsp;
 
@@ -577,6 +684,61 @@ here nonetheless.
       directories, and soft links, but maybe it should.
 5. Optimize the Rust implementation further!
     * I'd love to make the primary implementation even faster! Right now I'm
-      not sure what I could do to speed up the program further but I'm sure
-      down the road I'll remember optimizations I currently can't recall or
-      I'll learn about new ways to profile, or new methods for optimization.
+      not super sure what to do to speed up the program further, although I have
+      some ideas:
+        * One idea for optimizing I have is to have `cmp-tree` go on a
+          directory-by-directory basis. When going through a directory tree,
+          `cmp-tree` would get the list of files in the current directory its
+          in and compare those files *before* recursing further. This differs
+          from how `cmp-tree` works now where it recurses through the full
+          first and second directory trees to create two full file trees before
+          combining them into one giant unique file list which `cmp-tree` then
+          loops through, comparing files. The thought behind this alternative
+          approach is that since it would access files to generate the file
+          list and then almost immediately actually compares the files, the
+          disk accesses the program performs over its runtime will be for data
+          that is closer together on the disk, speeding up the disk I/O which
+          should be the slowest form of significant data access in the program.
+          One problem with this alternative approach is that it may not
+          multithread as well since it won't have a complete list of all the
+          files to compare which it could evenly divide up, and instead would
+          have to blindly multithread on directories which may vary wildly in
+          size. Of course the current multithreading implementation has a
+          similar weakness with respect to file sizes. Currently, `cmp-tree`
+          multithreads by giving each thread an equal number of files to
+          compare from the complete file list. What would perhaps better even
+          the workload would be to divide the list into chunks of equal size
+          *in terms of bytes*, not file count so that one thread isn't stuck
+          comparing four 3 gig files while another has to compare four 1 meg
+          files. The alternative approach ultimately may be slower, and it
+          would be a lot of work to implement, so I might prefer to find other
+          optimizations first.
+        * I recently did some profiling on `cmp-tree` and I found that on a
+          semi-standard input, the majority of CPU time (~54%) is spent
+          comparing bytes from files, with only a small percentage (~8%) of run
+          time spent reading the files. I also profiled the memory usage of
+          `cmp-tree` and I found that `PathBuf`s and `Path`s use a lot more
+          memory than I thought they would.
+        * As I perhaps hinted at above, I thought disk I/O was going to be the
+          next low-hanging optimization fruit, but now I'm less sure. Maybe
+          there's some other way to compare file data that would be more
+          efficient than what I do now, but without writing non-portable,
+          architecture-specific code, I'm not sure there is a more efficient
+          option *and* I'm not sure I could write more efficient
+          architecture-specific code haha.
+        * Perhaps if I switch to the alternative approach, I can print the
+          output as each comparison is performed and modify one
+          `PathBuf`/`Path` per thread, removing the `first_path` and
+          `second_path` members from the `FullFileComparison` struct and saving
+          the program from allocating as much since a heavily used
+          `PathBuf`/`Path` will likely have allocated itself enough space to
+          hold most upcoming paths. Not sure how Something to think about!
+        * Another place for possible optimization is that in
+          `relative_files_in_tree()`, the file type of the directory entry is
+          checked and after that, it is essentially discarded. Later during
+          execution, we check the file type of every file that gets compared.
+          Perhaps we can save the program from that later file check by setting
+          the file type during `relative_files_in_tree()`. This sort of change
+          would go against the structure of the `cmp-tree` as it exists now,
+          but if I implement the alternative approach, this change would come
+          about naturally.
