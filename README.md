@@ -558,10 +558,22 @@ cache misses were not great, about 10%. L3 cache misses were excellent, about
 `cmp-tree` would auto-determine how many cores were on the machine it was
 running on and create 1 thread per core, on my 16 core machine I was getting
 ~1.8 CPUs utilized. Better than single-threaded, but that is woefully poor CPU
-usage by each thread on average. Originally I didn't notice this metric and I
-thought that perhaps L1 cache misses were something I could look into
-optimizing. It's possible that the bad CPU utilization stat is inflated by
-other factors, but it's too terrible a number to not investigate.
+usage by each thread on average (around 11.25% CPU utilization per thread).
+It's hard for me to determine how much weight to put on this statistic though.
+On one hand, it would make a lot of sense if `cmp-tree` was disk bound, in
+which case CPU usage would be quite poor because the threads would all spend a
+lot of time waiting for their file reading calls to return. On the other hand,
+(as I'll cover below), I also had profiling info at this time that indicated
+that reading files played a relatively small roll into total CPU time (~8%).
+Maybe I'm misunderstanding the metrics, but to me that seemed to indicate that
+file reading wasn't resulting in a lot of waiting *or* CPU work. Maybe I'm
+failing to distinguish CPU utilization and CPU time, and maybe the call-graphs
+I saw calculated their statistics based on how much time the CPU spent doing
+actual work in those functions (and ignored how long the threads spent
+waiting), and as such reported that reading files didn't take very long in
+terms of CPU time. It's not clear to me at this point. Regardless, the point is
+that CPU utilization was terrible, and that statistic alone could maybe guide
+my following profiling efforts or future optimization.
 
 I decided I maybe wanted some more info on cache performance so I ran a `perf
 state -e` command asking for more information about cache misses and
@@ -570,9 +582,9 @@ keep in mind.
 
 Next I used `callgrind` to take a look at the call graph and which functions
 were eating up the greatest portions of the total CPU time the program used. I
-found that the majority of CPU time (~54%) was spent comparing bytes from
-files, with only a small percentage (~8%) of run time spent reading the files.
-This also surprised me since I thought this program could be really disk I/O
+found that the majority of CPU time (~54%) was spent comparing chunks from
+regular files, with only a small percentage (~8%) of run time spent reading the
+files. This also surprised me since I thought this program could be really disk
 heavy and that on the right input, disk I/O would contribute a significant
 amount to total CPU time.
 
@@ -580,56 +592,58 @@ After checking the `callgrind` call graph, I profiled the memory usage of
 `cmp-tree` using `heaptrack`. Again, to my surprise I found that `PathBuf`s and
 `Path`s were using a lot more memory than I thought they would. Not as much as
 `readdir`, but I already call `readdir` only once for every file across
-both directory trees. Perhaps if I switched `cmp-tree` to the aforemention
-alternative, directory-by-directory approach, I could simply print the output
-as each comparison is performed and then reuse *one* `PathBuf`/`Path` per
+both directory trees. Perhaps if I switched `cmp-tree` to the aforementioned
+alternative, the directory-by-directory approach, I could simply print the output
+of each comparison as it is performed and then reuse *one* `PathBuf`/`Path` per
 thread, allowing me to remove the `first_path` and `second_path` members from
 the `FullFileComparison` struct.
 
-I also used `strace`, specifically with its `-r` flag to see how long my
-program was spending in each syscall it called. At the time that's what I
+Finally, I also used `strace`, specifically with its `-r` flag to see how long
+my program was spending in each syscall it called. At the time that's what I
 thought the numbers added by the `-r` flag meant, but it turns out the `-r`
 just tells you the gap in time between the previous syscall and the one it is
 currently entering. These gaps can be helpful, but it's not what I was looking
 for. This misunderstanding led to me seeing nothing particularly out of the
-ordinary to me in the output of `strace` except for what I thought were a rare
-few 9x-slower-than-the-rest `statx()` calls (in retrospect, it's not clear
-these calls were slow at all! There may have just been a moderate delay between
-their calling and the previously called syscall). That said, it did seem
-strange to me that among the close to 1000 lines of output my original `strace
--r` call generated, there were only 16 lines about `read()` when my program
-obviously spends a lot of time reading from files (when the directory trees
-contain lots of mostly-similar regular files, which the input I was giving it
-did). This made me think `strace` was not going to be helpful for me. I would
-later find out two things about calling `strace` that would change that
-opinion. First, I found out that the `-r` flag was not giving me the
-information I thought it was, and to actually get the amount of time each
-syscall took to complete, I needed to use the `-T` flag instead. Next, I found
-out that in order to get syscall info on all the threads created by my program
-I need to give `strace` an additional flag: `-ff`. Running `strace -ff -T` gave
-me 95,000 lines of output, **81,000** of which were `read()` calls! Now that
-seems more correct. I also found one `futex()` call that took 0.81 seconds to
-complete. I didn't know if that was unreasonable for that syscall, but I did
-know that the average syscall in the program took closer to 0.000004 seconds.
-All said and done, my main takeaways were (1) that perhaps I can play with the
-read size of my read calls in order to improve performance. 81,000 out of
-95,000 is a dominating presence from `read()`. Maybe that's fine, but perhaps
-the startup and finishing costs of the read syscall could be adding up
-needlessly, and fewer biggers reads could be a good idea. Further still, maybe
-the first read could read quite a small number of bytes (to quickly catch files
-that differ in the first few bytes) and increase the read size for following
-read calls we become increasing confident that the files will match.
+ordinary in the output of `strace` except for what I thought were a rare few
+9x-slower-than-the-rest `statx()` calls. (In retrospect, it's not clear these
+calls were slow at all! There may have just been a moderate delay between their
+calling and the previously called syscall) That said, it did seem strange to me
+that among the close-to-1000-lines of output my original `strace -r` call
+generated, there were only 16 lines about `read()` when my program obviously
+spends a lot of time reading from files (when the directory trees contain lots
+of mostly-similar regular files, which the input I was giving it did). This
+made me think `strace` was not going to be helpful for me. I would later find
+out two things about calling `strace` that would change that opinion. First, I
+found out that the `-r` flag was not giving me the information I thought it
+was, and to actually get the amount of time each syscall took to complete, I
+needed to use the `-T` flag instead. Next, I found out that in order to get
+syscall info on all the threads created by my program I need to give `strace`
+an additional flag: `-ff`. Running `strace -ff -T` gave me 95,000 lines of
+output, **81,000** of which were `read()` calls! Now that seems more correct. I
+also found one `futex()` call that took 0.81 seconds to complete. I didn't know
+if that was an unreasonable length of time for that syscall, but I did know
+that the average syscall in the program took closer to 0.000004 seconds. All
+said and done, my main takeaways from using `strace` were (1) that perhaps I
+can play with the read size of my read calls in order to improve performance.
+81,000 out of 95,000 is a dominating presence from `read()`. Maybe that's fine,
+but perhaps the startup and finishing costs of the `read()` syscall could be
+adding up needlessly, and fewer, bigger reads could be a good idea. Further
+still, maybe the first read could read quite a small number of bytes (to
+quickly catch files that differ in the first few bytes) and increase the read
+size for following read calls as we become increasing confident that the files
+will match.
 
 In short, I learned a lot about profiling and related tools such as `perf`,
-`heaptrack` and `strace`, but the direction to take my optimization in next
-isn't perfectly clear. Perhaps the best idea for optimization is at the moment
-is pipelining. This was something I hadn't heard much about prior to this
-profiling stint, but I recently learned that the producer-consumer model is a
-common approach for pipelining processing files. Intuitively it could reduce
-the wait time each thread currently incurs when they attempt to read from a
-file before comparing the read contents. It would be a fair amount of work
-implementing it, but I think that's the next direction I'll take this project.
-I'm looking forward to it! Hopefully it pays off!
+`heaptrack`, and `strace`. The direction to take my optimization in next,
+however, isn't perfectly clear. Perhaps the best idea for optimization I have
+at the moment is pipelining. This was something I hadn't heard much about prior
+to this profiling stint, but I recently learned that the producer-consumer
+multithreading model is a common approach for pipelining the processing of many
+files. Intuitively it could reduce the wait time each thread currently incurs
+when they attempt to read from a file before comparing the read contents. It
+would be a fair amount of work implementing it, but I think that's the next
+direction I'll take this project. I'm looking forward to it! Hopefully it pays
+off!
 
 &nbsp;
 
