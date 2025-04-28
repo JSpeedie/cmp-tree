@@ -727,32 +727,104 @@ here nonetheless.
           files. The alternative approach ultimately may be slower, and it
           would be a lot of work to implement, so I might prefer to find other
           optimizations first.
-        * I recently did some profiling on `cmp-tree` and I found that on a
-          semi-standard input, the majority of CPU time (~54%) is spent
-          comparing bytes from files, with only a small percentage (~8%) of run
-          time spent reading the files. I also profiled the memory usage of
-          `cmp-tree` and I found that `PathBuf`s and `Path`s use a lot more
-          memory than I thought they would.
-        * As I perhaps hinted at above, I thought disk I/O was going to be the
-          next low-hanging optimization fruit, but now I'm less sure. Maybe
-          there's some other way to compare file data that would be more
-          efficient than what I do now, but without writing non-portable,
-          architecture-specific code, I'm not sure there is a more efficient
-          option *and* I'm not sure I could write more efficient
-          architecture-specific code haha.
-        * Perhaps if I switch to the alternative approach, I can print the
-          output as each comparison is performed and modify one
-          `PathBuf`/`Path` per thread, removing the `first_path` and
-          `second_path` members from the `FullFileComparison` struct and saving
-          the program from allocating as much since a heavily used
-          `PathBuf`/`Path` will likely have allocated itself enough space to
-          hold most upcoming paths. Not sure how Something to think about!
-        * Another place for possible optimization is that in
-          `relative_files_in_tree()`, the file type of the directory entry is
-          checked and after that, it is essentially discarded. Later during
-          execution, we check the file type of every file that gets compared.
-          Perhaps we can save the program from that later file check by setting
-          the file type during `relative_files_in_tree()`. This sort of change
-          would go against the structure of the `cmp-tree` as it exists now,
-          but if I implement the alternative approach, this change would come
-          about naturally.
+        * Perhaps if I switch to the "directory-by-directory" approach, I can
+          print the output of each comparison as the comparison is performed.
+          This could mean modifying only one `PathBuf`/`Path` per thread which
+          could have performance payoffs. For example, since each thread would
+          reuse a single `PathBuf`/`Path`, this might mean less heap
+          allocations total since the single `PathBuf`/`Path` in each thread
+          would grow to allocate longer paths, but could then remain that
+          length for all future comparisons. In the current implementation
+          where there is one `PathBuf` object per comparison, the program has
+          to perform an allocation for every single Path. I'm not sure that
+          this benefit outweighs some of the potential negatives of the
+          "directory-by-directory" approach (e.g., that it likely won't
+          multithread as well) but given that `PathBuf`s and `Path`s `.push()`
+          and `.join()` methods are responsible for 28% of memory usage during
+          the peak of memory usage, it's something to think about!
+        * Another place for possible optimization is in
+          `relative_files_in_tree()` where the file type of a directory entry
+          is checked and after that, the file type data is essentially
+          discarded. Later during execution, we check the file type of every
+          file that gets compared (by a different means, but still getting
+          essentially the same data). Perhaps we can save the program from that
+          latter file check by storing the file type of a given file during
+          `relative_files_in_tree()`. This sort of change would go against the
+          structure of the `cmp-tree` as it exists now a little, but if I
+          implement the "directory-by-directory" approach, this change would
+          come about naturally, but I need not adopt that approach to implement
+          this possible optimization.
+        * Lastly, and most importantly, I'm starting to think my current
+          multithreading model is the biggest current bottleneck to the
+          program. I'm not certain how to interpret all the profiling data I
+          recently collected, but here are the important pieces. First,
+          `callgrind` indicates that ~8% of CPU time is spent on reading.
+          That's not an enormous amount, but if I could take a huge bite out of
+          it, it could save some meaningful time. Second, `perf stat -d`
+          indicates that CPU utilization on my 16 core machine was on average,
+          very poor at around 1.7 CPUs (out of a maximum of 16.0). All this,
+          paired with the natural intuition that this program is likely disk
+          bound (given that it interacts with so many files) leads me to think
+          that switching my multithreading model to focus primarily on
+          mitigating the slowness of disk operations could speed up the
+          program. As such, I'm currently considering changing the
+          multithreading to something in line with the producer-consumer model.
+          I have 2 main reasons why I think this will speed things up:
+            * First, CPU utilization is very poor with my current
+              multithreading approach and I think there's a couple moments
+              where things are spending a more time than they need to blocking.
+              Right now, every thread handles its own file reading and its own
+              file-chunk-comparing. I think a producer-consumer model where one
+              thread reads a bunch of data and then gives it to a pool of
+              threads dedicated to comparing data could be a lot faster. The
+              reading thread can read the next set of data for all the threads
+              *while* all the comparing threads are comparing the current set
+              of data. This would (hopefully) effectively eliminate the dead
+              time the threads currently experience where they wait for their
+              read call to finish before comparing anything. This wait time
+              could be a significant contributor to the poor CPU utilization I
+              measured.
+            * Second, disk access is most likely close to random in my current
+              multithreading approach since as it stands right now, each thread
+              takes 1 contiguous block of the total file list and works to
+              complete all the comparisons in that block. This means that the
+              first and last thread could be attempting to access files in
+              their sections of the total comparison list at roughly the same
+              time. These files are probably far apart on the actual file
+              system and this could slow down disk I/O. Under a
+              producer-consumer multithreading model where one reader thread
+              reads the files in the list *in the order the files appear in the
+              list*, read operations could be sped up simply because we are
+              accessing disk in a more ordered way.
+            * Third, in a multithreading model with one reader thread and a
+              bunch of comparing threads, work could possibly be divided more
+              evenly than under my current multithreading model. As it stands
+              right now, `cmp-tree` divides the work between threads *evenly*
+              in the sense that each thread has an equal number of comparisons
+              to do. Of course, comparing identical 3 gig files is not an equal
+              amount of work to comparing two identical 1 meg files. This is a
+              weakness of my current multithreading model, and while not
+              immediately resolved by a producer-consumer model, the reader
+              thread could distribute an even *amount of bytes to compare* when
+              doing regular file comparisons (by far the costliest comparisons
+              to do). More evenly split work could lead to (by my guess) at
+              best great speed gains (on particulary unequal directory trees,
+              where files early in the list are very small, and files late in
+              the list are ginormous) and at worst, next to negligible gains
+              (when the total file size of all the files in each of the
+              divided-up chunks of the file list are roughly the same). This
+              problem of the unequal division of labour between threads can be
+              solved within my current multithreading approach, but it is
+              *easier* to resolve in a producer-consumer model.
+            * In summary, the first advantage to the producer-consumer model
+              would be that it would largely eliminate the time threads
+              currently spend waiting for read calls (this time is instead
+              replaced with the time it takes to communicate the
+              data-to-be-compared between the reading thread and the comparing
+              threads, which should hopefully be faster since it's all done in
+              memory), and the second advantage is that all reading from the
+              disk should be faster because the storage device will be accessed
+              in a more efficient access pattern. The third advantage of the
+              producer-consumer model is that it will be easier to divide the
+              work very evenly between threads, making `cmp-tree` run much
+              faster on lopsided directory trees.
