@@ -3,6 +3,24 @@ import os
 from pathlib import Path
 
 
+class PartialFileComparison():
+    def __init__(self, file_cmp: FileCmp, first_ft: SimpleFileType,
+        second_ft: SimpleFileType):
+
+        self.file_cmp = file_cmp
+        self.first_ft = first_ft
+        self.second_ft = second_ft
+
+
+class FullFileComparison():
+    def __init__(self, partial_cmp: PartialFileComparison, first_path: Path,
+        second_path: Path):
+
+        self.partial_cmp = partial_cmp
+        self.first_path = first_path
+        self.second_path = second_path
+
+
 def relative_files_in_tree(root: Path, extension: Path) -> [Path]:
     '''
     Returns an unsorted list of relative file paths for all files (in the broad
@@ -69,6 +87,53 @@ def files_in_tree(root: Path) -> [Path]:
     return relative_files_in_tree(root, extension)
     # }}}
 
+
+def compare_directory_trees(first_root: Path, second_root: Path) -> [FullFileComparison]
+    '''
+    Returns a sorted list of `FullFileComparisons` representing comparisons
+    between every file contained in one of the root directories and the file of
+    the same relative path in the other root directory. This includes
+    comparisons between a file and its non-existent equivalent if there is no
+    equivalent in the other root directory. The list is sorted by the relative
+    path of each `FullFileComparison`.
+
+    Args:
+        `first_root`: the file path to the root of the first directory tree.
+        `second_root`: the file path to the root of the second directory tree.
+
+    Returns:
+        A list of `FullFileComparisons` representing the comparisons between
+        every file contained in both root directories.
+    '''
+    # {{{
+
+    ret = []
+    # Get the first directory file list and the second directory file list: the
+    # list of files in each directory
+    first_ftree = files_in_tree(first_root)
+    second_ftree = files_in_tree(second_root)
+
+    # Create a vector that contains both the files from the first directory
+    # tree and the files from the second directory tree
+    combined_ftree = []
+    combined_ftree.append(first_ftree)
+    combined_ftree.append(second_ftree)
+    # Sort the combined file tree and remove duplicate items
+    combined_ftree.sort()
+    combined_ftree = list(dict.fromkeys(combined_ftree))
+
+    # Go through all the files in the combined  file list, create two full
+    # paths to the file, one rooted at `first_root`, one rooted at
+    # `second_root`, and compare them
+    for e in combined_ftree:
+        FullFileComparison res
+        res.first_path = first_root / e
+        res.second_path = second_root / e
+        res.partial_cmp = compare_path(res.first_path, res.second_path)
+        ret.append(res)
+
+    return ret
+    # }}}
 
 
 if __name__ == "__main__":
