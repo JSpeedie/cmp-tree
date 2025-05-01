@@ -22,7 +22,7 @@
 namespace fs = std::filesystem;
 
 
-/* For printing coloured output */
+/* For printing coloured output to the terminal */
 char NOTHING[] = { "" };
 char BOLD[] = { "\x1B[1m" };
 char NORMAL[] = { "\x1B[0m" };
@@ -35,22 +35,22 @@ char CYAN[] = { "\x1B[36m" };
 char WHITE[] = { "\x1B[37m" };
 
 
-/** Returns an unsorted vector list of relative file paths for all files (in the broad
- * sense of the word, including links and directories, as well as hidden files)
- * in a directory tree rooted at the directory pointed to by the path
- * '&root' / '&extension'. The file paths included in the list will all
- * begin with '&extension', but not '&root'.
+/** Returns an unsorted vector list of relative file paths for all files (in
+ * the broad sense of the word, including links and directories, as well as
+ * hidden files) in a directory tree rooted at the directory pointed to by the
+ * path `&root` / `&extension`. The file paths included in the list will all
+ * begin with `&extension`, but not `&root`.
  *
- * \param '&root' the beginning of the file path to the directory for which we wish
- *     to get a list of all the files in the directory tree. It will be combined
- *     with '&extension' to produce the complete path.
- * \param '&extension' the end of the file path to the directory for which we wish
- *     to get a list of all the files in the directory tree. It will be combined
- *     with '&root' to produce the complete path.
+ * \param `&root` the beginning of the file path to the directory for which we
+ *     wish to get a list of all the files in the directory tree. It will be
+ *     combined with `&extension` to produce the complete path.
+ * \param `&extension` the end of the file path to the directory for which we
+ *     wish to get a list of all the files in the directory tree. It will be
+ *     combined with `&root` to produce the complete path.
  * \return an unsorted vector list of the relative file paths for all the files
- *     in the directory tree rooted at '&root' / '&extension'. The file paths
- *     included in the list will omit '&root' from their path, but include
- *     '&extension'.
+ *     in the directory tree rooted at `&root` / `&extension`. The file paths
+ *     included in the list will omit `&root` from their path, but include
+ *     `&extension`.
  */
 std::vector<fs::path> relative_files_in_tree( \
 	fs::path &root, fs::path &extension) {
@@ -93,14 +93,14 @@ std::vector<fs::path> relative_files_in_tree( \
 }
 
 
-/** Returns an unsorted vector list of file paths for all the files (in the broad
- * sense of the word, including links and directories, as well as hidden
- * files) in a directory tree rooted at the directory pointed to by '&root'.
+/** Returns an unsorted vector list of file paths for all the files (in the
+ * broad sense of the word, including links and directories, as well as hidden
+ * files) in a directory tree rooted at the directory pointed to by `&root`.
  *
- * \param '&dir_path' the file path to the directory for which we wish to get
- *     a list of all the files in the directory tree.
+ * \param `&dir_path` the file path to a directory that roots a directory tree
+ *     which we wish to get a list of all files contained within.
  * \return an unsorted vector list of the relative file paths for all the files
- *     in the directory tree rooted at '&root'.
+ *     in the directory tree rooted at `&root`.
  */
 std::vector<fs::path> files_in_tree(fs::path &root) {
 	/* {{{ */
@@ -114,11 +114,11 @@ std::vector<fs::path> files_in_tree(fs::path &root) {
  * and -1 if they are not. Both file paths must point to regular files and
  * both regular files must exist.
  *
- * \param '&first_path' a file path that points to the first file we wish to
+ * \param `&first_path` a file path that points to the first file we wish to
  *     compare.
- * \param '&second_path' a file path that points to the second file we wish to
+ * \param `&second_path` a file path that points to the second file we wish to
  *     compare.
- * \return 0 if they files are byte-for-byte identical, -1 otherwise.
+ * \return 0 if the files are byte-for-byte identical, -1 otherwise.
  */
 int compare_files(fs::path &first_path, fs::path &second_path) {
 	/* {{{ */
@@ -174,14 +174,14 @@ int compare_files(fs::path &first_path, fs::path &second_path) {
 }
 
 
-/** Takes two paths and returns a PartialFileComparison that represents whether
- * the two files pointed to by the two paths are the same or different.
+/** Takes two paths and returns a `PartialFileComparison` that represents
+ * whether the two files pointed to by the two paths are the same or different.
  *
- * \param '&first_path' a file path that points to the first file we wish to
+ * \param `&first_path` a file path that points to the first file we wish to
  *     compare.
- * \param '&second_path' a file path that points to the second file we wish to
+ * \param `&second_path` a file path that points to the second file we wish to
  *     compare.
- * \return a PartialFileComparison that will represents whether the two files
+ * \return a `PartialFileComparison` that will represents whether the two files
  *     are equivalent, if they differ and how they differ, as well as the two
  *     file types of the files.
  */
@@ -263,16 +263,17 @@ PartialFileComparison compare_path( \
 }
 
 
-/** Returns a sorted vector list of FullFileComparisons representing
+/** Returns a sorted vector list of `FullFileComparisons` representing
  * comparisons between every file contained in one of the root directories and
- * the file of the same relative path in the other root directory. This includes
- * comparisons between a file and its non-existent equivalent if there is no
- * equivalent in the other root directory. The list is sorted by the relative
- * path of each FullFileComparison.
+ * the file of the same relative path in the other root directory. This
+ * includes comparisons between a file and its non-existent equivalent if there
+ * is no equivalent in the other root directory. The list is sorted by the
+ * relative path of each `FullFileComparison`.
  *
- * \param '&first_root' the file path to the root of the first directory tree.
- * \param '&second_root' the file path to the root of the second directory tree.
- * \return a vector list of FullFileComparisons representing the comparisons
+ * \param `&first_root` the file path to the root of the first directory tree.
+ * \param `&second_root` the file path to the root of the second directory
+ *     tree.
+ * \return a vector list of `FullFileComparisons` representing the comparisons
  *     between every file contained in both root directories.
  */
 std::vector<FullFileComparison> compare_directory_trees( \
