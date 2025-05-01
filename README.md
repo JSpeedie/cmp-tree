@@ -99,6 +99,13 @@ make
 
 *Please refer to the `README.md` in `./rust/cmp-tree`*
 
+#### Python
+
+```bash
+cd python/cmp-tree
+python cmp-tree.py [path-to-first-directory] [path-to-second-directory]
+```
+
 &nbsp;
 
 ### Testing
@@ -179,6 +186,11 @@ throughout this project were:
    languages like C++/Rust
 4. What it's like writing in a very modern language like Rust compared to C++
 5. The basics of program profiling
+    * What insights can we get from `perf stat -d`?
+    * What insights can we get from `perf record` + `perf report`?
+    * What insights can we get from `callgrind`?
+    * What insights can we get from `heaptrack`?
+    * What insights can we get from `strace`?
 6. How to program in Rust more generally
     * How do you efficiently read from a file?
     * How do you read file metadata?
@@ -186,6 +198,9 @@ throughout this project were:
     * How might you handle error reporting in your Rust program?
     * How do you add tests to your project in Rust?
     * How do you write multithreaded code in Rust?
+7. How does developing in Python compare to limited and simple languages like
+   Bash? How does it compare to involved and robust languages like C, C++ and
+   Rust?
 
 If you came here looking only for an executable that will allow you to compare
 all the files in two directory trees, then simply build the Rust version of
