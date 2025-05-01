@@ -1,6 +1,7 @@
 from enum import Enum # For enums
 from pathlib import Path # For Paths
-import filecmp # Possibly unnecessary
+import argparse # For commandline argument parsing
+import filecmp # Currently unused. Should test to see if it's faster than my handwritten stuff
 import os # For os.scandir()
 
 
@@ -42,21 +43,6 @@ class FileCmp(Enum):
         return f"{self.__class__.__name__}.{self.name}"
 
 
-#FileCmp = Enum('FileCmp',
-#    [
-#        ('ExistenceNeitherFile', 1),
-#        ('ExistenceOnlyFirstFile', 2),
-#        ('ExistenceOnlySecondFile', 3),
-#        ('FileTypeTypeMismatch', 4),
-#        ('SubstanceRegFileContentMismatch', 5),
-#        ('SubstanceSoftLinkLinkMismatch', 6),
-#        ('MetadataAccessTimeMismatch', 7),
-#        ('MetadataCreationTimeMismatch', 8),
-#        ('MetadataModificationTimeMismatch', 9),
-#        ('Match', 10)
-#    ])
-
-
 class SimpleFileType(Enum):
     RegFile = 1
     Directory = 2
@@ -66,12 +52,10 @@ class SimpleFileType(Enum):
         return f"{self.__class__.__name__}.{self.name}"
 
 
-#SimpleFileType = Enum('SimpleFileType',
-#    [
-#        ('RegFile', 1),
-#        ('Directory', 2),
-#        ('SoftLink', 3),
-#    ])
+class Config():
+    matches: bool
+    pretty: bool
+    totals: bool
 
 
 class PartialFileComparison():
@@ -97,13 +81,14 @@ class FullFileComparison():
             + f"first_path: {self.first_path}, " \
             + f"second_path: {self.second_path}>"
 
+
 def dedup(lst):
     '''
     Deduplicates elements in a list. To say a little more, this function takes
     a sorted list containing elements of some type that can be assessed for
     inequality and returns a list with all the same elements but with all
     duplicate elements absent.
-    
+
     Args:
         `lst`: a sorted list of some type of elements which we want to
             deduplicate.
@@ -134,11 +119,35 @@ def dedup(lst):
     # }}}
 
 
+def default_config() -> Config:
+    '''
+    Returns the default config for `cmp-tree`.
+
+    Args:
+        Nothing.
+
+    Returns:
+        A `Config` with all its values set to the default values for
+        `cmp-tree`.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+    ret = Config()
+    ret.matches = False
+    ret.pretty = False
+    ret.totals = False
+
+    return ret
+    # }}}
+
+
 def get_simplefiletype(filepath: Path) -> SimpleFileType:
     '''
     Returns a `SimpleFileType` representing the file type of the file pointed
     to by `filepath`.
-    
+
     Args:
         `filepath`: the file path for the file (understood in the broad sense) which we
             wish to get the file type of.
@@ -162,7 +171,6 @@ def get_simplefiletype(filepath: Path) -> SimpleFileType:
     # }}}
 
 
-
 def relative_files_in_tree(root: Path, extension: Path) -> [Path]:
     '''
     Returns an unsorted list of relative file paths for all files (in the broad
@@ -170,7 +178,7 @@ def relative_files_in_tree(root: Path, extension: Path) -> [Path]:
     files) in a directory tree rooted at the directory pointed to by the path
     of `root` joined with `extension`. The file paths included in the list will
     omit `root` and instead will begin with `extension'.
-    
+
     Args:
         `root`: the beginning of the file path to the directory for which we
             wish to get a list of all the files in the directory tree. It will
@@ -238,7 +246,7 @@ def compare_files(first_path: Path, second_path: Path) -> bool:
     Takes two paths pointing to two regular files and returns `True` if the
     files are byte-for-byte identical, and `False` if they are not. Both file
     paths must point to regular files and both regular files must exist.
-    
+
     Args:
         `first_path`: a file path that points to the first regular file we wish
             to compare.
@@ -296,7 +304,7 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
     Takes two paths and returns a `PartialFileComparison` that represents
     whether the two files pointed to by the two paths are the same or
     different.
-   
+
     Args:
         `first_path`: a file path that points to the first file we wish to
             compare.
@@ -441,17 +449,20 @@ def compare_directory_trees(first_root: Path, second_root: Path) -> [FullFileCom
     # }}}
 
 
-def cmp_tree(first_root: Path, second_root: Path) -> int:
+def cmp_tree(conf: Config, first_root: Path, second_root: Path) -> int:
     '''
     Takes a two `Path`s pointing to two directory trees and compares the two
     directory trees, returning an `int` representing the appropriate exit code
     for this program given how the execution went.
 
     Args:
-        `first_root` a file path that points to the root directory of the first
+        `conf`: a `Config` representing a configuration for executing
+            `cmp-tree`, usually modified through command line arguments to the
+            program.
+        `first_root`: a file path that points to the root directory of the first
             directory tree we wish to compare. This function assumes that this
             path points to a directory and that the directory exists.
-        `second_root` a file path that points to the root directory of the
+        `second_root`: a file path that points to the root directory of the
             second directory tree we wish to compare. This function assumes
             that this path points to a directory and that the directory exists.
 
@@ -470,62 +481,57 @@ def cmp_tree(first_root: Path, second_root: Path) -> int:
     comparisons = compare_directory_trees(first_root, second_root);
 
     mismatch_occurred = False
-    flag_print_matches = True
-    flag_pretty_output = True
-
-    x = len(comparisons)
-    print(f"got {x} comparisons")
 
     for c in comparisons:
         if c.partial_cmp.file_cmp == FileCmp.MATCH:
-            if flag_print_matches:
-                if (flag_pretty_output):
+            if conf.matches:
+                if conf.pretty:
                     print("%s%s" % (BOLD, GREEN), end="")
                     print("\"%s\" == \"%s\"\n" \
                         % (c.first_path, c.second_path), end="")
-                if flag_pretty_output:
+                if conf.pretty:
                     print("%s" % NORMAL, end="")
         elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_TYPE:
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s%s" % (BOLD, RED), end="")
             print("\"%s\" is not of the same type as \"%s\"\n" \
                 % (c.first_path, c.second_path), end="")
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s" % NORMAL, end="")
             mismatch_occurred = True
         elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_CONTENT:
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s%s" % (BOLD, RED), end="")
             print("\"%s\" differs from \"%s\"\n" \
                 % (c.first_path, c.second_path), end="")
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s" % NORMAL, end="")
             mismatch_occurred = True
         elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_NEITHER_EXISTS:
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s%s" % (BOLD, RED), end="")
             print("Neither \"%s\" nor \"%s\" exist\n" \
                 % (c.first_path, c.second_path), end="")
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s" % NORMAL, end="")
             mismatch_occurred = True
         elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_FIRST_EXISTS:
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s%s" % (BOLD, RED), end="")
             print("\"%s\" exists, but \"%s\" does NOT exist\n" \
                 % (c.first_path, c.second_path), end="")
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s" % NORMAL, end="")
             mismatch_occurred = True
         elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_SECOND_EXISTS:
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s%s" % (BOLD, RED), end="")
             print("\"%s\" does NOT exist, but \"%s\" does exist\n" \
                 % (c.first_path, c.second_path), end="")
-            if flag_pretty_output:
+            if conf.pretty:
                 print("%s" % NORMAL, end="")
             mismatch_occurred = True
-    
+
     if mismatch_occurred:
         return 1
     else:
@@ -534,5 +540,28 @@ def cmp_tree(first_root: Path, second_root: Path) -> int:
 
 
 if __name__ == "__main__":
-    # print(cmp_tree(Path("/home/me/cmp-tree/tests/001/first"), Path("/home/me/cmp-tree/tests/001/second")))
-    print(cmp_tree(Path("/home/me/kingston1"), Path("/home/me/kingston2")))
+    parser = argparse.ArgumentParser()
+    # Add the two positional arguments
+    parser.add_argument('first_root', type=Path)
+    parser.add_argument('second_root', type=Path)
+    # Add the flag-based arguments
+    parser.add_argument('-m','--matches', action='store_true')
+    parser.add_argument('-p','--pretty', action='store_true')
+    # TODO: functionality unimplemented
+    #parser.add_argument('-t','--totals', action='store_true')
+    # Process the arguments given to this program
+    args = parser.parse_args()
+
+    # Get the default config
+    conf = default_config()
+    # And modify it as the commandline args demand
+    if args.matches == True:
+        conf.matches = True
+    if args.pretty == True:
+        conf.pretty = True
+    # TODO: functionality unimplemented
+    #if args.totals == True:
+    #    conf.totals = True
+
+    exit_code = cmp_tree(conf, args.first_root, args.second_root)
+    exit(exit_code)
