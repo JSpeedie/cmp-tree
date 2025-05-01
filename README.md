@@ -645,6 +645,87 @@ would be a fair amount of work implementing it, but I think that's the next
 direction I'll take this project. I'm looking forward to it! Hopefully it pays
 off!
 
+#### Part 9: Adding a Python Implementation
+
+Adding a Python implementation of `cmp-tree` was something I wanted to do from
+a very early point in this project. The main motivations stemmed from the fact
+that Python, while perhaps not as heavily used as C or C++ in systems-level
+work, is still often used for simple scripts supporting systems-level work.
+This paired with the fact that (in my opinion) Python is a much more ergonomic
+and built-out programming language than Bash made me want to practice writing
+Python code so that I could start using Python instead of Bash for some of my
+scripting work.
+
+After I finished the Bash, C, C++ and Rust implementations, I got caught doing
+extra work on each of them rather than quickly writing out a Bash
+implementation. I multithreaded the C implementation, I added tests to the Rust
+implementation, I multithreaded the Rust implementation, and just in general I
+spent a lot of time working on the primary implementation so I could have a
+reliable version of `cmp-tree` that I would actually be willing to use. The
+point is, I got distracted with other work that I thought (and still think!)
+was more important. But the time finally came and I wrote a Python
+implementation.
+
+It took me about half a work day to port the C++ code to Python (it helps to
+have the project already designed and implemented somewhere else!). Honestly,
+the main takeaway from this experience is that I really don't like Python haha.
+Maybe I do the wrong kind of work, the kind Python isn't best suited to, but
+man I just have a hard time seeing the circumstances when you would want to use
+this language. Here's how I see it: if you want to use Python rather than Bash,
+your script needs to be a little more complex than just a handful of lines
+doing trivial work. However, the moment you're working in Python, you now have
+to worry about the Python install situation on the machine your script is going
+to be running in! You can't just rely on some instruction that your script be
+run using `python3` and not `python`(2). Maybe your script uses stuff from
+Python version 3.11 but the next computer you run your script on only have
+Python 3.10. Maybe the next computer you run your script on doesn't even have
+Python. Every Linux computer will have Bash so no worrying about installing
+something prior to running your script.
+
+Accounting for Python versions are not my main gripe with Python though. My
+biggest concern about this language is that it just feels so unstable
+programming in it. I think this is true of all interpreted languages, but man I
+find it so uncomfortable programming in a non-compiled language. Obvious and
+simple but nonetheless application-crashing bugs can be caught before your
+program ever runs in compiled languages. In Python, it seems you just have to
+run the code and find out later. Okay that's not entirely fair - Python does
+seem to perform some checks right at the start of running your program, but
+only so few, and a lot errors are only caught when the problematic code is hit
+during run time. I don't doubt that there are Python development tools built to
+solve this problem, but the fact that it isn't a part of the language is still
+a huge downside in my eyes. I also recognize that in a well-built project, you
+should have excellent test coverage and that if you have this, my complaint
+seemingly becomes invalidated. In part I can agree with that, and at this point
+it's true that I have yet to add tests to my Python implementation. However,
+what continues to bother me is that without tests I feel like I have very, very
+little trust in the implementation (even though I've obviously looked over
+every single line in it at some point and they've all /seemed/ correct to me)
+and that this increased danger has not come with any real benefit. It reminds
+me of a contrast I see between Rust and C. Sure, maybe I have to spend more
+time battling the compiler to get a compiling version of my implementation in
+Rust. However, with Rust, once it compiles I find I'm often very close to the
+finish line. With C, getting it to compile can sometimes feel like only the
+half way mark. What I'm trying to say is that the qualities of Python that
+allow for its supposed simplicity and speed of development are (in my opinion)
+actually traps, and they don't reduce the time spent developing software, they
+just offset some development and tack on interest. Python's indentation-scope
+system and it's dynamic typing are two great examples of this. Prima facie,
+super simple, flexible, ergonomic. Further down the road though, they obscure
+what would otherwise be obvious mistakes in your code and in the case of the
+indentation-scope system, (in my opinion) they make it possible to right some
+truly hideous and hard to understand code.
+
+I guess at the end of the day, there are no surprises to be found here. C is
+the language I'm most comfortable in, and of course a C developer is going to
+have these complaints about Python. It's funny because I can tell that I'm
+currently going through a transition from being a C developer to being a Rust
+developer and at the end of that process I'm going to have the same complaints
+about C. "Sure C is harder than Python at first, but (in many ways) it's easier
+than Python in the long run (if you're trying to develop quality software)!"
+will get accompanied with "Sure Rust is harder than C at first, but (in many
+ways) it's easier than C in the long run (if you're trying to develop quality
+software)!"
+
 &nbsp;
 
 ### Next Steps
@@ -653,6 +734,8 @@ I currently have a few plans for this repo. I have other things going on in my
 life that are more important (including my job!) so whether or not I will get
 around to all or even some of these remains to be seen, but I'll lay them out
 here nonetheless.
+
+#### Repo Specific:
 
 1. Write a Python implementation of `cmp-tree`
     * I've seen some methods in some Python libraries that would've made
@@ -667,17 +750,7 @@ here nonetheless.
       forking and then running `cmp` and that I now know that and can simply
       not make the same mistake again in Python, maybe the Python performance
       will be surprisingly good!
-2. Add a commandline option to the Rust version to limit the program to single
-   thread execution.
-    * As I mentioned in the Project Report, I think multithreading is very
-      often a trade-off. You trade increased CPU time for less real-world,
-      clock time. For this reason, I think it makes sense to have an option for
-      users to force `cmp-tree` to run in single-threaded mode in case it is
-      going to be run on a busy server, a battery powered device, or in some
-      other situation where reducing the total amount of CPU work is more
-      important than the real-world time savings to be gained from
-      multithreading.
-3. Talk about the perfomance of `cmp-tree` versus alternatives in the Project
+2. Talk about the perfomance of `cmp-tree` versus alternatives in the Project
    Report
     * While this project served (and continues to serve) mostly as a learning
       opportunity for me, I also very well might not have done quite as much
@@ -689,14 +762,27 @@ here nonetheless.
       equivalent), my program has been faster than `diff -qr` by a modest
       margin. It would be nice to see some graphs that show the progress trend
       of my speed of all my implementations.
-4. Add support for files of all formats in Rust version?
+
+#### Rust Implementation Specific:
+
+1. Add a commandline option to the Rust version to limit the program to single
+   thread execution.
+    * As I mentioned in the Project Report, I think multithreading is very
+      often a trade-off. You trade increased CPU time for less real-world,
+      clock time. For this reason, I think it makes sense to have an option for
+      users to force `cmp-tree` to run in single-threaded mode in case it is
+      going to be run on a busy server, a battery powered device, or in some
+      other situation where reducing the total amount of CPU work is more
+      important than the real-world time savings to be gained from
+      multithreading.
+2. Add support for files of all formats in Rust version?
     * Currently the Rust implementation supports directory trees comprised
       solely of regular files, directories and soft links. Pipes, character
       devices, sockets, and other forms of files that appear on Linux (the only
       OS I intend for this project to support) have no support yet. I still
       have to decide if `cmp-tree` needs to support more than regular files,
       directories, and soft links, but maybe it should.
-5. Optimize the Rust implementation further!
+3. Optimize the Rust implementation further!
     * I'd love to make the primary implementation even faster! Right now I'm
       not super sure what to do to speed up the program further, although I have
       some ideas:
@@ -828,3 +914,24 @@ here nonetheless.
               producer-consumer model is that it will be easier to divide the
               work very evenly between threads, making `cmp-tree` run much
               faster on lopsided directory trees.
+
+#### Python Implementation Specific:
+
+1. Add a support for the `-t` commandline argument
+    * Ideally the Python implementation would support all the same commandline
+      arguments as the Rust implementation, but unfortunately, I only have time
+      to properly develop one implementation, and I've decided that will be the
+      Rust implementation. That said, adding support for the `-mpt` commandline
+      arguments is a bare minimum. The C++ and C implementations support those
+      flags and so should the Python version! Right now the Python
+      implementation supports the `-m` flag and the `-p` flag.
+2. Add testing for the Python version
+    * The Python implementation is the implementation I feel least secure
+      about. There's no compilation process so who knows what simple errors
+      I'll hit that my program just hasn't **run** into yet. Haha I feel like
+      the only way to have any security at all in your Python code is to test
+      it. I know this is true of other languages but it is *especially* true of
+      Python, I feel. Anyway, I already have a few tests written for my Rust
+      version so it would just be a matter of porting the same tests to my
+      Python code, essentially.
+3. Add virtual env stuff to ensure there's no issues with Python versions?
