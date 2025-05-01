@@ -148,7 +148,7 @@ const WHITE: &str = "\x1B[37m";
 /// Returns the default config for `cmp-tree`.
 ///
 /// #### Return:
-/// * a `Config` struct will all its values set to the default values for `cmp-tree`.
+/// * a `Config` struct with all its values set to the default values for `cmp-tree`.
 pub fn default_config() -> Config {
     /* {{{ */
     return Config {
@@ -165,7 +165,7 @@ pub fn default_config() -> Config {
 /// Returns a freshly initialized Totals struct.
 ///
 /// #### Return:
-/// * a `Totals` struct will all its values set to suitable defaults.
+/// * a `Totals` struct with all its values set to suitable defaults.
 fn default_totals() -> Totals {
     /* {{{ */
     return Totals {
