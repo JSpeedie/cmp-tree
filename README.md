@@ -750,21 +750,20 @@ life that are more important (including my job!) so whether or not I will get
 around to all or even some of these remains to be seen, but I'll lay them out
 here nonetheless.
 
-#### Repo Specific:
+#### General to the Repo:
 
-1. Write a Python implementation of `cmp-tree`
-    * I've seen some methods in some Python libraries that would've made
-      writing `cmp-tree` much simpler than it was in any of the languages I
-      have written the program in so far, except for Bash. I am thinking that
-      in the future, outside of the most basic of scripts, I would like to use
-      Python for scripting instead of Bash. Bash is just a mess, and while I'm
-      not a big Python fan, it has infinitely better support for arrays among
-      many, many other advantages! I am also curious to see how a similar
-      implementation would perform in Python. Given that one of the bigger
-      bottlenecks for a program like `cmp-tree` that I've found so far was
-      forking and then running `cmp` and that I now know that and can simply
-      not make the same mistake again in Python, maybe the Python performance
-      will be surprisingly good!
+1. Measure the performance of the Python implementation
+    * I've just recently finished my implementation of `cmp-tree` in Python. At
+      the moment I've been focused on testing and correctness since that's been
+      a pain point with the Python implementation and obviously has to proceed
+      any real speed tests. That said, I'm close to the point where I think I
+      can start comparing its performance. It's likely I have a couple of
+      simple mistakes in my Python code that are leading to non-negligible
+      performance drops (perhaps there's a way to deliberately pass things by
+      reference, for instance!) so maybe I can correct those too to give Python
+      a fair chance since out of all the (real, not-just-for-scripting)
+      languages I implemented `cmp-tree` in so far, it is the one I have the
+      poorest understanding for writing performant code with it.
 2. Talk about the perfomance of `cmp-tree` versus alternatives in the Project
    Report
     * While this project served (and continues to serve) mostly as a learning
@@ -777,6 +776,59 @@ here nonetheless.
       equivalent), my program has been faster than `diff -qr` by a modest
       margin. It would be nice to see some graphs that show the progress trend
       of my speed of all my implementations.
+
+#### Bash Implementation Specific:
+
+1. Add support for the `-mpt` commandline arguments?
+    * The Bash implementation is the least featureful and slowest
+      implementation. It would be nice to add at least these commandline
+      arguments so that it can offer the features every other implementation in
+      this repo does, but I have my hesitations. First, I'm not sure adding the
+      commandline argument passing will be clean, and second, I'm not sure
+      adding the functionality of some of those flags will be quick and I'm
+      honestly sort of ready to call it "done" on the Bash implementation. It
+      is many factors slower than `diff -qr` (which, at the time of writing, is
+      noticeably slower than my C, C++ and Rust implementations of `cmp-tree`)
+
+#### C++ Implementation Specific:
+
+1. Make the C++ implementation multithreaded.
+    * I've never done any multithreading in C++ and this could be a great
+      opportunity to explore things like Threading Building Blocks (TBB),
+      `std::atomic<T>`, `std::lock_guard<std::mutex>`, and so on. I suspect my
+      experience will be equally as arduous as it was multithreading the C
+      implementation of `cmp-tree`, and not nearly as enjoyable as it was
+      multithreading the Rust implementation, but it's worth giving a go. I'm
+      way more likely to find myself multithreading C++ code in my career than
+      I will be to find myself multithreading Rust code.
+2. Add testing
+    * I'm new to C++, honestly. I'd say I only really started using it in 2024.
+      Naturally, I don't have much or sometimes any experience with common
+      elements in a standard toolchain with C++. This includes testing
+      frameworks. I'd love to give `GoogleTest` a go!
+3. Switch from Make to CMake
+    * I decided to use Make for the C++ code because the project is simple
+      (right now it's just one `.cpp` file and one `.hpp` file, although I
+      should probably break those up), so I thought I'd use Make because it's
+      what I'm most familiar with. This made initial development of the C++
+      implementation easy, but I'm starting to feel like CMake would be a great
+      leap forward, especially for any project that doesn't just fit into one
+      `.cpp` and one `.hpp`.
+
+#### C Implementation Specific:
+
+1. Add a commandline option to the C version to limit the program to single
+   threaded execution.
+    * It's actually been quite a while between the time that I'm writing this
+      idea for improving the C implementation and the last time I did any work
+      on the C implementation, so it is possible I have already done this, but
+      I really don't think I have. Anyway, I think it's a feature the program
+      should have since multithreading is often a tradeoff.
+2. Add testing
+    * I'll admit it: I don't have much experience writing tests for C projects.
+      At this point, I'm starting to migrate away from C towards C++ and
+      especially Rust, but this project could provide a good opportunity for me
+      to get some experience with C testing frameworks.
 
 #### Rust Implementation Specific:
 
@@ -797,10 +849,21 @@ here nonetheless.
       OS I intend for this project to support) have no support yet. I still
       have to decide if `cmp-tree` needs to support more than regular files,
       directories, and soft links, but maybe it should.
-3. Optimize the Rust implementation further!
+3. Add more tests to the Rust implementation!
+    * As it stands right now, I have a starter set of tests for the Rust
+      implementation that should help me catch any big bugs. That, and the fact
+      that the program was written in Rust, gives me a decent sense of security
+      in the Rust implementation. That said, not only do I want to write
+      unit-tests for all the functions in the Rust version (a process I have
+      only just begun), but I also would like to create more test inputs for
+      the program. I want many tests that have files of the same relative path
+      but with differing content, for starters, but also tests where relative
+      paths point to files of different types (soft link vs regular file, for
+      example) as I think this is currently completely untested.
+4. Optimize the Rust implementation further!
     * I'd love to make the primary implementation even faster! Right now I'm
-      not super sure what to do to speed up the program further, although I have
-      some ideas:
+      not super sure what to do to speed up the program further, although I
+      have some ideas:
         * One idea for optimizing I have is to have `cmp-tree` go on a
           directory-by-directory basis. When going through a directory tree,
           `cmp-tree` would get the list of files in the current directory its
@@ -932,21 +995,15 @@ here nonetheless.
 
 #### Python Implementation Specific:
 
-1. Add a support for the `-t` commandline argument
-    * Ideally the Python implementation would support all the same commandline
-      arguments as the Rust implementation, but unfortunately, I only have time
-      to properly develop one implementation, and I've decided that will be the
-      Rust implementation. That said, adding support for the `-mpt` commandline
-      arguments is a bare minimum. The C++ and C implementations support those
-      flags and so should the Python version! Right now the Python
-      implementation supports the `-m` flag and the `-p` flag.
-2. Add testing for the Python version
+1. Add more testing to the Python version
     * The Python implementation is the implementation I feel least secure
       about. There's no compilation process so who knows what simple errors
       I'll hit that my program just hasn't **run** into yet. Haha I feel like
       the only way to have any security at all in your Python code is to test
       it. I know this is true of other languages but it is *especially* true of
-      Python, I feel. Anyway, I already have a few tests written for my Rust
-      version so it would just be a matter of porting the same tests to my
-      Python code, essentially.
-3. Add virtual env stuff to ensure there's no issues with Python versions?
+      Python, I feel. I have ported all the integration tests I wrote for the
+      Rust version of `cmp-tree` to my testing framework for the Python
+      implementation, but it would definitely be beneficial to port the
+      existing unit-tests from the Rust implementation as well. As I said, I
+      feel pretty insecure about the Python version so I should really write
+      more tests too.
