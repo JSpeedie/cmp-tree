@@ -58,6 +58,24 @@ class Config():
     totals: bool
 
 
+class Totals():
+    file_matches: int
+    max_file_matches: int
+    dir_matches: int
+    max_dir_matches: int
+    softlink_matches: int
+    max_softlink_matches: int
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: " \
+            + f"file_matches: {self.file_matches}, " \
+            + f"max_file_matches: {self.max_file_matches}, " \
+            + f"dir_matches: {self.dir_matches}, " \
+            + f"max_dir_matches: {self.max_dir_matches}, " \
+            + f"softlink_matches: {self.softlink_matches}, " \
+            + f"max_softlink_matches: {self.max_softlink_matches}>"
+
+
 class PartialFileComparison():
     file_cmp: FileCmp
     first_ft: SimpleFileType
@@ -143,6 +161,32 @@ def default_config() -> Config:
     # }}}
 
 
+def default_totals() -> Totals:
+    '''
+    Returns the default totals count for `cmp-tree`.
+
+    Args:
+        Nothing.
+
+    Returns:
+        A `Totals` with all its values set to safe starting values.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+    ret = Totals()
+    ret.file_matches = 0
+    ret.max_file_matches = 0
+    ret.dir_matches = 0
+    ret.max_dir_matches = 0
+    ret.softlink_matches = 0
+    ret.max_softlink_matches = 0
+
+    return ret
+    # }}}
+
+
 def get_simplefiletype(filepath: Path) -> SimpleFileType:
     '''
     Returns a `SimpleFileType` representing the file type of the file pointed
@@ -167,6 +211,7 @@ def get_simplefiletype(filepath: Path) -> SimpleFileType:
     elif filepath.is_symlink():
         return SimpleFileType.SoftLink
     else:
+        print("Sorry, files of this type are not supported")
         raise Exception("Sorry, files of this type are not supported")
     # }}}
 
@@ -359,6 +404,8 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
     if not first_path.exists(follow_symlinks=False) \
         and not second_path.exists(follow_symlinks=False):
 
+        ret.first_ft = None
+        ret.second_ft = None
         ret.file_cmp = FileCmp.MISMATCH_NEITHER_EXISTS
         return ret
     elif first_path.exists(follow_symlinks=False) \
@@ -367,7 +414,9 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
         try:
             ret.first_ft = get_simplefiletype(first_path)
         except:
-            raise Exception("Sorry, files of this type are not supported")
+            raise Exception("Could not get the file type of first file")
+
+        ret.second_ft = None
         ret.file_cmp = FileCmp.MISMATCH_ONLY_FIRST_EXISTS
         return ret
     elif not first_path.exists(follow_symlinks=False) \
@@ -376,7 +425,9 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
         try:
             ret.second_ft = get_simplefiletype(second_path)
         except:
-            raise Exception("Sorry, files of this type are not supported")
+            raise Exception("Could not get the file type of first file")
+
+        ret.first_ft = None
         ret.file_cmp = FileCmp.MISMATCH_ONLY_SECOND_EXISTS
         return ret
 
@@ -387,11 +438,11 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
     try:
         ret.first_ft = get_simplefiletype(first_path)
     except:
-        raise Exception("Sorry, files of this type are not supported")
+        raise Exception("Could not get the file type of first file")
     try:
         ret.second_ft = get_simplefiletype(second_path)
     except:
-        raise Exception("Sorry, files of this type are not supported")
+        raise Exception("Could not get the file type of first file")
 
     # If the two paths point to files that are of different types (e.g. a
     # directory vs. a symlink, a fifo vs a regular file) then return early,
@@ -481,6 +532,7 @@ def compare_directory_trees(first_root: Path, second_root: Path) -> [FullFileCom
         res = FullFileComparison()
         res.first_path = first_root / e
         res.second_path = second_root / e
+        print(f"first_path: {res.first_path}, second_path: {res.second_path}")
         res.partial_cmp = compare_path(res.first_path, res.second_path)
         ret.append(res)
 
@@ -488,14 +540,217 @@ def compare_directory_trees(first_root: Path, second_root: Path) -> [FullFileCom
     # }}}
 
 
-def cmp_tree(conf: Config, first_root: Path, second_root: Path) -> int:
+def update_totals(totals_count: Totals, p_cmp: PartialFileComparison) -> None:
+    '''
+    Takes a `Totals` object, `totals_count`, and increments the relevant
+    members inside it based on the result of a file comparison represented by
+    `p_cmp`.
+
+    Args:
+        `totals_count`: a `Totals` representing running totals for a given
+            directory tree comparison.
+        `p_cmp`: a `PartialFileComparison` containing only the necessary the
+            information about the 2 files that were compared.
+
+    Returns:
+        `None`.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+
+    # First we determine how the given PartialFileComparison should affect the
+    # max file, directory, etc. match counts in the Totals struct
+
+    # If at least one of the files in this comparison is a directory, increment
+    # the max number of possible directory matches
+    if p_cmp.first_ft == SimpleFileType.Directory:
+        totals_count.max_dir_matches += 1
+    else:
+        if p_cmp.second_ft == SimpleFileType.Directory:
+            totals_count.max_dir_matches += 1
+
+    # If at least one of the files in this comparison is a regular file,
+    # increment the max number of possible regular file matches
+    if p_cmp.first_ft == SimpleFileType.RegFile:
+        totals_count.max_file_matches += 1
+    else:
+        if p_cmp.second_ft == SimpleFileType.RegFile:
+            totals_count.max_file_matches += 1
+
+    # If at least one of the files in this comparison is a soft link, increment
+    # the max number of possible soft link matches
+    if p_cmp.first_ft == SimpleFileType.SoftLink:
+        totals_count.max_softlink_matches += 1
+    else:
+        if p_cmp.second_ft == SimpleFileType.SoftLink:
+            totals_count.max_softlink_matches += 1
+
+    # Second, we determine how the given `PartialFileComparison` should affect
+    # the actual file, directory, etc. match counts in the `Totals` struct
+    if p_cmp.file_cmp == FileCmp.MATCH:
+        if p_cmp.first_ft == SimpleFileType.RegFile:
+            totals_count.file_matches += 1
+        elif p_cmp.first_ft == SimpleFileType.Directory:
+            totals_count.dir_matches += 1
+        elif p_cmp.first_ft == SimpleFileType.SoftLink:
+            totals_count.softlink_matches += 1
+    # }}}
+
+
+def print_one_comparison(config: Config, full_comp: FullFileComparison) -> None:
+    '''
+    Takes a `FullFileComparison` and prints out the necessary information about
+    it. What information is printed will depend on the values of `config`.
+
+    Args:
+        `config`: a `Config` representing a configuration for executing
+            `cmp-tree`, usually modified through command line arguments to the
+            program.
+        `full_comp`: a `FullFileComparison` containing all the information
+            about the 2 files that were compared.
+
+    Returns:
+        `None`.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+    if full_comp.partial_cmp.file_cmp == FileCmp.MATCH:
+        if config.matches:
+            if config.pretty:
+                print("%s%s" % (BOLD, GREEN), end="")
+                print("\"%s\" == \"%s\"\n" \
+                    % (full_comp.first_path, full_comp.second_path), end="")
+            if config.pretty:
+                print("%s" % NORMAL, end="")
+    elif full_comp.partial_cmp.file_cmp == FileCmp.MISMATCH_TYPE:
+        if config.pretty:
+            print("%s%s" % (BOLD, RED), end="")
+        print("\"%s\" is not of the same type as \"%s\"\n" \
+            % (full_comp.first_path, full_comp.second_path), end="")
+        if config.pretty:
+            print("%s" % NORMAL, end="")
+        mismatch_occurred = True
+    elif full_comp.partial_cmp.file_cmp == FileCmp.MISMATCH_CONTENT:
+        if config.pretty:
+            print("%s%s" % (BOLD, RED), end="")
+        print("\"%s\" differs from \"%s\"\n" \
+            % (full_comp.first_path, full_comp.second_path), end="")
+        if config.pretty:
+            print("%s" % NORMAL, end="")
+        mismatch_occurred = True
+    elif full_comp.partial_cmp.file_cmp == FileCmp.MISMATCH_NEITHER_EXISTS:
+        if config.pretty:
+            print("%s%s" % (BOLD, RED), end="")
+        print("Neither \"%s\" nor \"%s\" exist\n" \
+            % (full_comp.first_path, full_comp.second_path), end="")
+        if config.pretty:
+            print("%s" % NORMAL, end="")
+        mismatch_occurred = True
+    elif full_comp.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_FIRST_EXISTS:
+        if config.pretty:
+            print("%s%s" % (BOLD, RED), end="")
+        print("\"%s\" exists, but \"%s\" does NOT exist\n" \
+            % (full_comp.first_path, full_comp.second_path), end="")
+        if config.pretty:
+            print("%s" % NORMAL, end="")
+        mismatch_occurred = True
+    elif full_comp.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_SECOND_EXISTS:
+        if config.pretty:
+            print("%s%s" % (BOLD, RED), end="")
+        print("\"%s\" does NOT exist, but \"%s\" does exist\n" \
+            % (full_comp.first_path, full_comp.second_path), end="")
+        if config.pretty:
+            print("%s" % NORMAL, end="")
+        mismatch_occurred = True
+    # }}}
+
+
+def print_output(config: Config, directory_tree_comparison: [FullFileComparison]) -> None:
+    '''
+    Takes a list of `FullFileComparison`s and prints out the necessary
+    information about the list of file comparisons. What information is printed
+    will depend on the values of `config`.
+
+    Args:
+        `config`: a `Config` representing a configuration for executing
+            `cmp-tree`, usually modified through command line arguments to the
+            program.
+        `directory_tree_comparison`: a list of `FullFileComparison`s.
+            Typically, this parameter is the result of a call to
+            `compare_directory_trees()`.
+
+    Returns:
+        `None`.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+
+    totals_count = default_totals()
+
+    for ffc in directory_tree_comparison:
+        # If we are going to print totals, update our totals count struct
+        if config.totals:
+            update_totals(totals_count, ffc.partial_cmp)
+
+        # Print what needs to be printed for the current comparison. This
+        # function call may very well print nothing
+        print_one_comparison(config, ffc);
+
+    if config.totals:
+        print("All done!")
+        print(f"File byte-for-byte matches: " \
+            + f"{totals_count.file_matches}/{totals_count.max_file_matches}")
+        print("Directory matches: " \
+            + f"{totals_count.dir_matches}/{totals_count.max_dir_matches}")
+        print("Soft link matches: " \
+            + f"{totals_count.softlink_matches}" \
+            + f"/{totals_count.max_softlink_matches}")
+    # }}}
+
+
+def directory_tree_comparison_contains_mismatch(directory_tree_comparison: [FullFileComparison]) -> bool:
+    '''
+    Takes a list of `FullFileComparison`s and returns a `bool` representing
+    whether or not the file comparison list received as input contains any
+    mismatches or not.
+
+    Args:
+        `directory_tree_comparison`: a list of `FullFileComparison`s.
+            Typically, this parameter is the result of a call to
+            `compare_directory_trees()`.
+
+    Returns:
+        A `bool` that represents whether the input list contains any mismatches
+        or not.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+
+    # Go through the directory tree comparisons list
+    for ffc in directory_tree_comparison:
+        # If the current comparison is a mismatch of any kind, there is a
+        # mismatch in the comparison list. Return early
+        if ffc.partial_cmp.file_cmp != FileCmp.MATCH:
+            return True
+    # }}}
+
+
+def cmp_tree(config: Config, first_root: Path, second_root: Path) -> int:
     '''
     Takes a two `Path`s pointing to two directory trees and compares the two
     directory trees, returning an `int` representing the appropriate exit code
     for this program given how the execution went.
 
     Args:
-        `conf`: a `Config` representing a configuration for executing
+        `config`: a `Config` representing a configuration for executing
             `cmp-tree`, usually modified through command line arguments to the
             program.
         `first_root`: a file path that points to the root directory of the first
@@ -519,57 +774,11 @@ def cmp_tree(conf: Config, first_root: Path, second_root: Path) -> int:
     # Compare the directory trees!
     comparisons = compare_directory_trees(first_root, second_root)
 
-    mismatch_occurred = False
+    mismatch_occurred = \
+        directory_tree_comparison_contains_mismatch(comparisons);
 
-    for c in comparisons:
-        if c.partial_cmp.file_cmp == FileCmp.MATCH:
-            if conf.matches:
-                if conf.pretty:
-                    print("%s%s" % (BOLD, GREEN), end="")
-                    print("\"%s\" == \"%s\"\n" \
-                        % (c.first_path, c.second_path), end="")
-                if conf.pretty:
-                    print("%s" % NORMAL, end="")
-        elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_TYPE:
-            if conf.pretty:
-                print("%s%s" % (BOLD, RED), end="")
-            print("\"%s\" is not of the same type as \"%s\"\n" \
-                % (c.first_path, c.second_path), end="")
-            if conf.pretty:
-                print("%s" % NORMAL, end="")
-            mismatch_occurred = True
-        elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_CONTENT:
-            if conf.pretty:
-                print("%s%s" % (BOLD, RED), end="")
-            print("\"%s\" differs from \"%s\"\n" \
-                % (c.first_path, c.second_path), end="")
-            if conf.pretty:
-                print("%s" % NORMAL, end="")
-            mismatch_occurred = True
-        elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_NEITHER_EXISTS:
-            if conf.pretty:
-                print("%s%s" % (BOLD, RED), end="")
-            print("Neither \"%s\" nor \"%s\" exist\n" \
-                % (c.first_path, c.second_path), end="")
-            if conf.pretty:
-                print("%s" % NORMAL, end="")
-            mismatch_occurred = True
-        elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_FIRST_EXISTS:
-            if conf.pretty:
-                print("%s%s" % (BOLD, RED), end="")
-            print("\"%s\" exists, but \"%s\" does NOT exist\n" \
-                % (c.first_path, c.second_path), end="")
-            if conf.pretty:
-                print("%s" % NORMAL, end="")
-            mismatch_occurred = True
-        elif c.partial_cmp.file_cmp == FileCmp.MISMATCH_ONLY_SECOND_EXISTS:
-            if conf.pretty:
-                print("%s%s" % (BOLD, RED), end="")
-            print("\"%s\" does NOT exist, but \"%s\" does exist\n" \
-                % (c.first_path, c.second_path), end="")
-            if conf.pretty:
-                print("%s" % NORMAL, end="")
-            mismatch_occurred = True
+    # Print the appropriate output
+    print_output(config, comparisons)
 
     if mismatch_occurred:
         return 1
@@ -586,8 +795,7 @@ if __name__ == "__main__":
     # Add the flag-based arguments
     parser.add_argument('-m','--matches', action='store_true')
     parser.add_argument('-p','--pretty', action='store_true')
-    # TODO: functionality unimplemented
-    #parser.add_argument('-t','--totals', action='store_true')
+    parser.add_argument('-t','--totals', action='store_true')
     # Process the arguments given to this program
     args = parser.parse_args()
 
@@ -598,9 +806,8 @@ if __name__ == "__main__":
         conf.matches = True
     if args.pretty == True:
         conf.pretty = True
-    # TODO: functionality unimplemented
-    #if args.totals == True:
-    #    conf.totals = True
+    if args.totals == True:
+        conf.totals = True
 
     exit_code = cmp_tree(conf, args.first_root, args.second_root)
     exit(exit_code)
