@@ -16,10 +16,22 @@ compares two directory trees telling you if they are identical.
 
 &nbsp;
 
-### Installation and Running
+### Installation
 
 ```bash
 cd python/cmp-tree
+pipenv install  # This will install all dependencies and setup up the virtual environment
+```
+
+&nbsp;
+
+### Running
+
+```bash
+cd python/cmp-tree
+# We use the following command to enter the virtual environment (which has the
+correct # version of python and all the dependencies)
+pipenv shell
 python cmp-tree.py [path-to-first-directory] [path-to-second-directory]
 ```
 
