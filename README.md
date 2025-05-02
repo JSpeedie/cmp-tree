@@ -101,10 +101,7 @@ make
 
 #### Python
 
-```bash
-cd python/cmp-tree
-python cmp-tree.py [path-to-first-directory] [path-to-second-directory]
-```
+*Please refer to the `README.md` in `./python/cmp-tree`*
 
 &nbsp;
 
