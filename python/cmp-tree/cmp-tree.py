@@ -241,7 +241,7 @@ def files_in_tree(root: Path) -> [Path]:
     # }}}
 
 
-def compare_files(first_path: Path, second_path: Path) -> bool:
+def compare_regular_files(first_path: Path, second_path: Path) -> bool:
     '''
     Takes two paths pointing to two regular files and returns `True` if the
     files are byte-for-byte identical, and `False` if they are not. Both file
@@ -262,8 +262,8 @@ def compare_files(first_path: Path, second_path: Path) -> bool:
     # {{{
     # Check if the files differ in size. If they do, they cannot be
     # byte-for-byte identical
-    first_file_info = first_path.stat(follow_symlinks=False);
-    second_file_info = second_path.stat(follow_symlinks=False);
+    first_file_info = first_path.stat(follow_symlinks=False)
+    second_file_info = second_path.stat(follow_symlinks=False)
 
     if first_file_info.st_size != second_file_info.st_size:
         return False
@@ -279,7 +279,7 @@ def compare_files(first_path: Path, second_path: Path) -> bool:
 
             # If the read calls failed? TODO: what is this checking exactly?
             if not first_chunk and not second_chunk:
-                break;
+                break
 
             # One file ended before the other
             if len(first_chunk) != len(second_chunk):
@@ -295,7 +295,36 @@ def compare_files(first_path: Path, second_path: Path) -> bool:
 
     # If we haven't returned `False` by this point, these two files must have
     # passed all our checks and must be equal.
-    return True;
+    return True
+    # }}}
+
+
+def compare_soft_links(first_path: Path, second_path: Path) -> bool:
+    '''
+    Takes two paths pointing to two soft links and returns `True` if the
+    both links have the exact same target path, and `False` if they do not. Both file
+    paths must point to soft links and both soft links must exist.
+
+    Args:
+        `first_path`: a file path that points to the first soft link we wish to
+            compare.
+        `second_path`: a file path that points to the second soft link we wish
+            to compare.
+
+    Returns:
+        `True` if the soft links are completely identical, `False` otherwise.
+
+    Raises:
+        Nothing.
+    '''
+    # {{{
+    # If the soft links differ in link path
+    if first_path.readlink() != second_path.readlink():
+        return False
+
+    # If we haven't returned `False` by this point, these two soft links must
+    # have passed all our checks and must be equal.
+    return True
     # }}}
 
 
@@ -383,7 +412,17 @@ def compare_path(first_path: Path, second_path: Path) -> PartialFileComparison:
         # If the file comparison succeeded we know that this means the two
         # files are byte-for-byte identical. Return with the comparison member
         # set to match
-        if compare_files(first_path, second_path) == True:
+        if compare_regular_files(first_path, second_path) == True:
+            ret.file_cmp = FileCmp.MATCH
+            return ret
+        else:
+            ret.file_cmp = FileCmp.MISMATCH_CONTENT
+            return ret
+    elif ret.first_ft == SimpleFileType.SoftLink:
+        # If the file comparison succeeded we know that this means the two
+        # files are byte-for-byte identical. Return with the comparison member
+        # set to match
+        if compare_soft_links(first_path, second_path) == True:
             ret.file_cmp = FileCmp.MATCH
             return ret
         else:
@@ -478,7 +517,7 @@ def cmp_tree(conf: Config, first_root: Path, second_root: Path) -> int:
     '''
     # {{{
     # Compare the directory trees!
-    comparisons = compare_directory_trees(first_root, second_root);
+    comparisons = compare_directory_trees(first_root, second_root)
 
     mismatch_occurred = False
 
