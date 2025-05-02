@@ -824,8 +824,8 @@ fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Pat
 fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
     /* {{{ */
 
-    /* First we determine how the given PartialFileComparison should affect the max file,
-    * directory, etc. match counts in the Totals struct */
+    /* First we determine how the given `PartialFileComparison` should affect the max file,
+     * directory, etc. match counts in the `Totals` struct */
     match &p_cmp.first_ft {
         Some(f_ft) => match f_ft {
             SimpleFileType::Directory => totals_count.max_dir_matches += 1,
@@ -890,8 +890,8 @@ fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
         },
     }
 
-    /* Second, we determine how the given PartialFileComparison should affect the actual file,
-    * directory, etc. match counts in the Totals struct */
+    /* Second, we determine how the given `PartialFileComparison` should affect the actual file,
+     * directory, etc. match counts in the `Totals` struct */
     match &p_cmp.file_cmp {
         FileCmp::Match => match p_cmp.first_ft.clone().unwrap() {
             SimpleFileType::RegFile => totals_count.file_matches += 1,
