@@ -776,6 +776,18 @@ here nonetheless.
       equivalent), my program has been faster than `diff -qr` by a modest
       margin. It would be nice to see some graphs that show the progress trend
       of my speed of all my implementations.
+3. Add more tests!
+    * As it stands right now, I have a starter set of tests for the Rust
+      implementation comprised of 10 integration tests and 16 unit tests that
+      should help me catch any big bugs. That, and the fact that the program
+      was written in Rust, gives me a decent sense of stability in the Rust
+      implementation. That said, not only do I want to write unit tests for all
+      the functions in the Rust version (a process I have only just begun), but
+      I also would like to create more test inputs for the program in general.
+      I want *many* tests that have files of the same relative path but with
+      differing content, for starters, but also tests where relative paths
+      point to files of different types (soft link vs regular file, for
+      example) as I think this is currently completely untested.
 
 #### Bash Implementation Specific:
 
@@ -849,17 +861,6 @@ here nonetheless.
       OS I intend for this project to support) have no support yet. I still
       have to decide if `cmp-tree` needs to support more than regular files,
       directories, and soft links, but maybe it should.
-3. Add more tests to the Rust implementation!
-    * As it stands right now, I have a starter set of tests for the Rust
-      implementation that should help me catch any big bugs. That, and the fact
-      that the program was written in Rust, gives me a decent sense of security
-      in the Rust implementation. That said, not only do I want to write
-      unit-tests for all the functions in the Rust version (a process I have
-      only just begun), but I also would like to create more test inputs for
-      the program. I want many tests that have files of the same relative path
-      but with differing content, for starters, but also tests where relative
-      paths point to files of different types (soft link vs regular file, for
-      example) as I think this is currently completely untested.
 4. Optimize the Rust implementation further!
     * I'd love to make the primary implementation even faster! Right now I'm
       not super sure what to do to speed up the program further, although I
@@ -997,13 +998,13 @@ here nonetheless.
 
 1. Add more testing to the Python version
     * The Python implementation is the implementation I feel least secure
-      about. There's no compilation process so who knows what simple errors
-      I'll hit that my program just hasn't **run** into yet. Haha I feel like
-      the only way to have any security at all in your Python code is to test
-      it. I know this is true of other languages but it is *especially* true of
-      Python, I feel. I have ported all the integration tests I wrote for the
-      Rust version of `cmp-tree` to my testing framework for the Python
-      implementation, but it would definitely be beneficial to port the
-      existing unit-tests from the Rust implementation as well. As I said, I
-      feel pretty insecure about the Python version so I should really write
-      more tests too.
+      about. Python is not a (fully! *grinds teeth*) compiled language so who
+      knows what simple errors I'll hit that my program just hasn't **run**
+      into yet. Haha I feel like the only way to have any security at all in
+      your Python code is to test it. I know this is true of other languages
+      but it is *especially* true of Python, I feel. I have ported all the
+      integration tests I wrote for the Rust version of `cmp-tree` to my
+      testing framework for the Python implementation, but it would definitely
+      be beneficial to port the existing unit-tests from the Rust
+      implementation as well. As I said, I feel pretty insecure about the
+      Python version so I should really write more tests too.
