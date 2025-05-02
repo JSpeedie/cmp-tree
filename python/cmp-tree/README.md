@@ -1,9 +1,13 @@
 # cmp-tree
 
-### Project Description
+### Directory Description
 
-This is the Python implementation of `cmp-tree`. The program compares two
-directory trees telling you if they are identical.
+This directory contains the Python implementation of `cmp-tree`. The program
+compares two directory trees telling you if they are identical.
+
+> Note: The directory trees used for testing the Python implementation are not
+> contained within this current directory tree. They are 2 levels above in
+> `[repo-root]/tests`
 
 #### Features of the Python Implementation
 

@@ -1,11 +1,18 @@
 # cmp-tree
 
-### Project Description
+### Directory Description
 
-This is the Rust implementation of `cmp-tree`. The program compares two
-directory trees telling you if they are identical.
+This directory contains the Rust implementation of `cmp-tree`. The program
+compares two directory trees telling you if they are identical.
 
-The Rust implementation is multithreaded.
+> Note: The directory trees used for testing the Rust implementation are not
+> contained within this current directory tree. They are 2 levels above in
+> `[repo-root]/tests`
+
+#### Features of the Rust Implementation
+
+* The Rust implementation is multithreaded.
+* The Rust implementation is tested.
 
 &nbsp;
 
