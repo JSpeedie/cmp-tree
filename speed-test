@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# num_calls=1000
-# first_dir="/home/me/kingston1"
-# second_dir="/home/me/kingston2"
 num_calls=100
-first_dir="/home/me/Books1/"
-second_dir="/home/me/Books2"
+first_dir="/home/me/kingston1"
+second_dir="/home/me/kingston2"
+# num_calls=100
+# first_dir="/home/me/Books1/"
+# second_dir="/home/me/Books2"
 
 bash_tests() {
 	# {{{
@@ -66,11 +66,12 @@ c_tests() {
 
 rust_tests() {
 	# {{{
+	cd rust/cmp-tree
 	echo "Running Rust version of cmp-tree $num_calls times..."
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		rust/cmp-tree/target/release/cmp-tree ${first_dir} ${second_dir} &> /dev/null
+		target/release/cmp-tree ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -79,17 +80,19 @@ rust_tests() {
 
 	echo "cmp-tree (Rust): $num_calls calls took a total of ${total_execution_time}s"
 	echo "cmp-tree (Rust): On average, each execution took ${average_execution_time}s"
+	cd ../..
 	# }}}
 }
 
 
 python_tests() {
 	# {{{
+	cd python/cmp-tree
 	echo "Running Python version of cmp-tree $num_calls times..."
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		python/cmp-tree/cmp-tree.py ${first_dir} ${second_dir} &> /dev/null
+		python cmp-tree.py ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -98,6 +101,7 @@ python_tests() {
 
 	echo "cmp-tree (Python): $num_calls calls took a total of ${total_execution_time}s"
 	echo "cmp-tree (Python): On average, each execution took ${average_execution_time}s"
+	cd ../..
 	# }}}
 }
 
