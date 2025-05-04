@@ -13,7 +13,7 @@ bash_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		bash/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
+		bash/cmp-tree/cmp-tree ${first_dir} ${second_dir} &>2
 	done
 
 	end=$(date +%s.%N)
@@ -32,7 +32,7 @@ cpp_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		cpp/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
+		cpp/cmp-tree/cmp-tree ${first_dir} ${second_dir} 1>&2
 	done
 
 	end=$(date +%s.%N)
@@ -51,7 +51,7 @@ c_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		c/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
+		c/cmp-tree/cmp-tree ${first_dir} ${second_dir} 1>&2
 	done
 
 	end=$(date +%s.%N)
@@ -71,7 +71,7 @@ rust_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		target/release/cmp-tree ${first_dir} ${second_dir} &> /dev/null
+		target/release/cmp-tree ${first_dir} ${second_dir} 1>&2
 	done
 
 	end=$(date +%s.%N)
@@ -92,7 +92,7 @@ python_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		python cmp-tree.py ${first_dir} ${second_dir} &> /dev/null
+		python cmp-tree.py ${first_dir} ${second_dir} 1>&2
 	done
 
 	end=$(date +%s.%N)
@@ -112,7 +112,7 @@ diff_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		diff -qr ${first_dir} ${second_dir} &> /dev/null
+		diff -qr ${first_dir} ${second_dir} 1>&2
 	done
 
 	end=$(date +%s.%N)
@@ -136,7 +136,7 @@ rsync_tests() {
 		# there are any differences in the two directory trees. Second, you
 		# must end the path to the directories that root each directory tree
 		# with a "/".
-		rsync -nrvc --delete kingston1/ kingston2/ &> /dev/null
+		rsync -nrvc --delete kingston1/ kingston2/ 1>&2
 	done
 
 	end=$(date +%s.%N)
