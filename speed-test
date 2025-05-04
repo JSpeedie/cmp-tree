@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 
-num_calls=1000
+# num_calls=1000
+# first_dir="/home/me/kingston1"
+# second_dir="/home/me/kingston2"
+num_calls=100
+first_dir="/home/me/Books1/"
+second_dir="/home/me/Books2"
 
 bash_tests() {
 	# {{{
@@ -8,7 +13,7 @@ bash_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		bash/cmp-tree/cmp-tree /home/me/kingston1 /home/me/kingston2 &> /dev/null
+		bash/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -27,7 +32,7 @@ cpp_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		cpp/cmp-tree/cmp-tree /home/me/kingston1 /home/me/kingston2 &> /dev/null
+		cpp/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -46,7 +51,7 @@ c_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		c/cmp-tree/cmp-tree /home/me/kingston1 /home/me/kingston2 &> /dev/null
+		c/cmp-tree/cmp-tree ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -65,7 +70,7 @@ rust_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		rust/cmp-tree/target/debug/cmp-tree /home/me/kingston1 /home/me/kingston2 &> /dev/null
+		rust/cmp-tree/target/release/cmp-tree ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -78,13 +83,32 @@ rust_tests() {
 }
 
 
+python_tests() {
+	# {{{
+	echo "Running Python version of cmp-tree $num_calls times..."
+	start=$(date +%s.%N)
+
+	for i in $(seq $num_calls); do
+		python/cmp-tree/cmp-tree.py ${first_dir} ${second_dir} &> /dev/null
+	done
+
+	end=$(date +%s.%N)
+	total_execution_time=$(echo "$end - $start" | bc -l)
+	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+
+	echo "cmp-tree (Python): $num_calls calls took a total of ${total_execution_time}s"
+	echo "cmp-tree (Python): On average, each execution took ${average_execution_time}s"
+	# }}}
+}
+
+
 diff_tests() {
 	# {{{
 	echo "Running diff $num_calls times..."
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		diff -qr /home/me/kingston1 /home/me/kingston2 &> /dev/null
+		diff -qr ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -125,5 +149,6 @@ rsync_tests() {
 cpp_tests
 c_tests
 rust_tests
+python_tests
 diff_tests
 rsync_tests
