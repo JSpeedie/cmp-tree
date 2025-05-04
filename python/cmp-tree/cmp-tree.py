@@ -532,7 +532,6 @@ def compare_directory_trees(first_root: Path, second_root: Path) -> [FullFileCom
         res = FullFileComparison()
         res.first_path = first_root / e
         res.second_path = second_root / e
-        print(f"first_path: {res.first_path}, second_path: {res.second_path}")
         res.partial_cmp = compare_path(res.first_path, res.second_path)
         ret.append(res)
 
