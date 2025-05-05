@@ -89,11 +89,7 @@ make
 
 #### C++
 
-```bash
-cd cpp/cmp-tree
-make
-./cmp-tree [path-to-first-directory] [path-to-second-directory]
-```
+*Please refer to the `README.md` in `./cpp/cmp-tree`*
 
 #### Rust
 
@@ -815,14 +811,6 @@ here nonetheless.
       Naturally, I don't have much or sometimes any experience with common
       elements in a standard toolchain with C++. This includes testing
       frameworks. I'd love to give `GoogleTest` a go!
-3. Switch from Make to CMake
-    * I decided to use Make for the C++ code because the project is simple
-      (right now it's just one `.cpp` file and one `.hpp` file, although I
-      should probably break those up), so I thought I'd use Make because it's
-      what I'm most familiar with. This made initial development of the C++
-      implementation easy, but I'm starting to feel like CMake would be a great
-      leap forward, especially for any project that doesn't just fit into one
-      `.cpp` and one `.hpp`.
 
 #### C Implementation Specific:
 
