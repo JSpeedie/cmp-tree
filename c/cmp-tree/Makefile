@@ -13,21 +13,19 @@ SRC = src
 
 # Debug Build Settings
 DEBUGDIR = debug
-DEBUGEXECUTABLE = $(DEBUGDIR)/$(EXECUTABLENAME)
 DEBUGCFLAGS = -ggdb
 
 # Release Build Settings
 RELEASEDIR = release
-RELEASEEXECUTABLE = $(RELEASEDIR)/$(EXECUTABLENAME)
 RELEASECFLAGS = -O2
 
 # `debug` first because we want `make` to just compile the debug build by
 # default, and the default target is always the the first one that doesn't
 # begin with "."
 .PHONY: debug
-debug: prep-debug $(DEBUGDIR)/cmp-tree
+debug: prep-debug $(DEBUGDIR)/$(EXECUTABLENAME)
 
-release: prep-release $(RELEASEDIR)/cmp-tree
+release: prep-release $(RELEASEDIR)/$(EXECUTABLENAME)
 
 prep-debug:
 	@mkdir -p $(DEBUGDIR)
@@ -65,7 +63,7 @@ $(DEBUGDIR)/better-strings.o: $(SRC)/better-strings.c $(SRC)/better-strings.h
 
 # Take all generated object files and libraries, link and produce the final
 # executable
-$(DEBUGDIR)/cmp-tree: $(DEBUGDIR)/cmp-tree.o $(DEBUGDIR)/dynamic-array.o $(DEBUGDIR)/better-strings.o
+$(DEBUGDIR)/$(EXECUTABLENAME): $(DEBUGDIR)/cmp-tree.o $(DEBUGDIR)/dynamic-array.o $(DEBUGDIR)/better-strings.o
 	$(CC) $(DEBUGCFLAGS) $^ $(INCS) $(LIBS) -o $@
 
 ####################
@@ -94,5 +92,5 @@ $(RELEASEDIR)/better-strings.o: $(SRC)/better-strings.c $(SRC)/better-strings.h
 
 # Take all generated object files and libraries, link and produce the final
 # executable
-$(RELEASEDIR)/cmp-tree: $(RELEASEDIR)/cmp-tree.o $(RELEASEDIR)/dynamic-array.o $(RELEASEDIR)/better-strings.o
+$(RELEASEDIR)/$(EXECUTABLENAME): $(RELEASEDIR)/cmp-tree.o $(RELEASEDIR)/dynamic-array.o $(RELEASEDIR)/better-strings.o
 	$(CC) $(RELEASECFLAGS) $^ $(INCS) $(LIBS) -o $@
