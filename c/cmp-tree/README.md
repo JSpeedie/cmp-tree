@@ -28,3 +28,9 @@ for development, by running:
 make
 ./debug/cmp-tree [path-to-first-directory] [path-to-second-directory]
 ```
+
+You can clean the directory of build results and related artifacts using:
+
+```bash
+make clean
+```

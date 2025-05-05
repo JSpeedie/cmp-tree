@@ -8,6 +8,8 @@ CFLAGS = -Wall
 CC = gcc
 # The name of the final executable we want to make
 EXECUTABLENAME = cmp-tree
+# The relative path to the source directory that contains all the source code
+SRC = src
 
 # Debug Build Settings
 DEBUGDIR = debug
@@ -33,6 +35,10 @@ prep-debug:
 prep-release:
 	@mkdir -p $(RELEASEDIR)
 
+clean:
+	rm -rf $(DEBUGDIR)
+	rm -rf $(RELEASEDIR)
+
 ####################
 #    Debug Build   #
 ####################
@@ -40,20 +46,21 @@ prep-release:
 # Note: The following 3 rules look like they can be abstracted into a single
 # rule, but doing so would require that all future files put under that rule
 # would have to have a corresponding .h file to go with the source and object
-# file. This very well might not be the case. However, we want all files that
-# have a corresponding .h file to have that file as a prerequisite, since if
-# something changes in the .h file, we want to recompile our object files.
+# file. This very well might not be the case. However, we can't just omit the
+# .h file prerequisite because we want all files that have a corresponding .h
+# file to have that file as a prerequisite since if something changes in the .h
+# file we want the corresponding object file to be recompiled.
 
 # Create the cmp-tree object file
-$(DEBUGDIR)/cmp-tree.o: cmp-tree.c cmp-tree.h
+$(DEBUGDIR)/cmp-tree.o: $(SRC)/cmp-tree.c $(SRC)/cmp-tree.h
 	$(CC) $(DEBUGCFLAGS) $< -c -o $@
 
 # Create the dynamic array object file
-$(DEBUGDIR)/dynamic-array.o: dynamic-array.c dynamic-array.h
+$(DEBUGDIR)/dynamic-array.o: $(SRC)/dynamic-array.c $(SRC)/dynamic-array.h
 	$(CC) $(DEBUGCFLAGS) $< -c -o $@
 
 # Create the better strings object file
-$(DEBUGDIR)/better-strings.o: better-strings.c better-strings.h
+$(DEBUGDIR)/better-strings.o: $(SRC)/better-strings.c $(SRC)/better-strings.h
 	$(CC) $(DEBUGCFLAGS) $< -c -o $@
 
 # Take all generated object files and libraries, link and produce the final
@@ -68,20 +75,21 @@ $(DEBUGDIR)/cmp-tree: $(DEBUGDIR)/cmp-tree.o $(DEBUGDIR)/dynamic-array.o $(DEBUG
 # Note: The following 3 rules look like they can be abstracted into a single
 # rule, but doing so would require that all future files put under that rule
 # would have to have a corresponding .h file to go with the source and object
-# file. This very well might not be the case. However, we want all files that
-# have a corresponding .h file to have that file as a prerequisite, since if
-# something changes in the .h file, we want to recompile our object files.
+# file. This very well might not be the case. However, we can't just omit the
+# .h file prerequisite because we want all files that have a corresponding .h
+# file to have that file as a prerequisite since if something changes in the .h
+# file we want the corresponding object file to be recompiled.
 
 # Create the cmp-tree object file
-$(RELEASEDIR)/cmp-tree.o: cmp-tree.c cmp-tree.h
+$(RELEASEDIR)/cmp-tree.o: $(SRC)/cmp-tree.c $(SRC)/cmp-tree.h
 	$(CC) $(RELEASECFLAGS) $< -c -o $@
 
 # Create the dynamic array object file
-$(RELEASEDIR)/dynamic-array.o: dynamic-array.c dynamic-array.h
+$(RELEASEDIR)/dynamic-array.o: $(SRC)/dynamic-array.c $(SRC)/dynamic-array.h
 	$(CC) $(RELEASECFLAGS) $< -c -o $@
 
 # Create the better strings object file
-$(RELEASEDIR)/better-strings.o: better-strings.c better-strings.h
+$(RELEASEDIR)/better-strings.o: $(SRC)/better-strings.c $(SRC)/better-strings.h
 	$(CC) $(RELEASECFLAGS) $< -c -o $@
 
 # Take all generated object files and libraries, link and produce the final
