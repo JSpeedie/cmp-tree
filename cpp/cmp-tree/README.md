@@ -7,9 +7,9 @@ compares two directory trees telling you if they are identical.
 
 #### Features of the C++ Implementation
 
+* The C++ implementation returns an exit code that represents if the directory
+  trees differed or not.
 * The C++ implementation supports the `-m`, `-p`, and `-t` flags.
-* The C++ implementation does NOT return an exit code that represents if the
-  directory trees differed or not.
 * The C++ implementation does NOT support soft links.
 * The C++ implementation is NOT multithreaded.
 * The C++ implementation is NOT tested.
