@@ -9,8 +9,8 @@ compares two directory trees telling you if they are identical.
 
 * The C implementation is multithreaded.
 * The C implementation supports the `-m`, `-p`, and `-t` flags.
-* The C implementation is NOT tested.
 * The C implementation does NOT support soft links.
+* The C implementation is NOT tested.
 * The C implementation MAY have memory leaks, it has not been checked.
 
 &nbsp;
