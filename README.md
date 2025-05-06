@@ -79,25 +79,9 @@ cd bash/cmp-tree
 ./cmp-tree [path-to-first-directory] [path-to-second-directory]
 ```
 
-#### C
+#### C, C++, Rust, and Python
 
-```bash
-cd c/cmp-tree
-make
-./cmp-tree [path-to-first-directory] [path-to-second-directory]
-```
-
-#### C++
-
-*Please refer to the `README.md` in `./cpp/cmp-tree`*
-
-#### Rust
-
-*Please refer to the `README.md` in `./rust/cmp-tree`*
-
-#### Python
-
-*Please refer to the `README.md` in `./python/cmp-tree`*
+*Please refer to the `README.md` in `./[language]/cmp-tree/`*
 
 &nbsp;
 
@@ -806,7 +790,7 @@ here nonetheless.
       multithreading the Rust implementation, but it's worth giving a go. I'm
       way more likely to find myself multithreading C++ code in my career than
       I will be to find myself multithreading Rust code.
-2. Add testing
+2. Add testing.
     * I'm new to C++, honestly. I'd say I only really started using it in 2024.
       Naturally, I don't have much or sometimes any experience with common
       elements in a standard toolchain with C++. This includes testing
@@ -821,7 +805,13 @@ here nonetheless.
       on the C implementation, so it is possible I have already done this, but
       I really don't think I have. Anyway, I think it's a feature the program
       should have since multithreading is often a tradeoff.
-2. Add testing
+2. Check for memory leaks.
+    * Some of the functions I wrote as a part of my C implementation return
+      values that need to be freed in some way or other by the caller. I'm
+      afraid that in most of these cases, the functions that call these such
+      functions do not free the return values. I need to take Valgrind to this
+      program and see what it says.
+3. Add testing.
     * I'll admit it: I don't have much experience writing tests for C projects.
       At this point, I'm starting to migrate away from C towards C++ and
       especially Rust, but this project could provide a good opportunity for me
