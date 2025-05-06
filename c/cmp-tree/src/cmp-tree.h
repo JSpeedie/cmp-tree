@@ -33,6 +33,15 @@ enum FileCmp {
 };
 
 
+/* A struct used to define the configuration `cmp-tree` functions will run
+ * under. Many functions within `cmp-tree` will require a Config struct and the
+ * values of said struct will affect how they work or run. */
+typedef struct cmp_tree_config {
+	bool matches;
+	bool pretty;
+	bool totals;
+}Config;
+
 typedef struct partial_file_cmp {
 	enum FileCmp file_cmp;
 	unsigned int first_fm;
