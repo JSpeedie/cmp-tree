@@ -264,9 +264,9 @@ fn relative_files_in_tree(root: &Path, extension: &Path) -> Vec<PathBuf> {
 }
 
 
-/// Returns an unsorted vector list of file paths for all the files (in the broad sense of the
-/// word, including links and directories, as well as hidden files) in a directory tree rooted at
-/// the directory pointed to by 'root'.
+/// Returns an unsorted vector list of relative file paths for all the files (in the broad sense of
+/// the word, including links and directories, as well as hidden files) in a directory tree rooted
+/// at the directory pointed to by `root`.
 ///
 /// #### Parameters:
 /// * `root` the file path to the directory for which we wish to get a list of all the files in the
@@ -282,8 +282,8 @@ fn files_in_tree(root: &Path) -> Vec<PathBuf> {
 }
 
 
-/// Takes two paths and a result representing how the files compare. Both file paths must point to
-/// regular files and both regular files must exist.
+/// Takes two paths and returns a result representing how the files compare. Both file paths must
+/// point to regular files and both regular files must exist.
 ///
 /// #### Parameters:
 /// * `first_path` a file path that points to the first file we wish to compare.
@@ -728,9 +728,9 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
 /// #### Return:
 /// * a `Result<Vec<FullFileComparison>, ()>` that represents whether this directory tree
 ///     comparison was able to be caried out successfully or not. If the `Result` turns out to be
-///     the `Vec<FullFileComparison>`, then the caller is given a list of all the file comparisons
-///     that were performed during the larger, directory tree comparison. If the `Result` turns out
-///     to be an `Err`, then this function experienced some sort of error.
+///     the `Vec<FullFileComparison>`, then the caller is given a sorted list of all the file
+///     comparisons that were performed during the comparison of the two directory trees. If the
+///     `Result` turns out to be an `Err`, then this function experienced some sort of error.
 fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Path) -> 
     Result<Vec<FullFileComparison>, ()> {
     /* {{{ */
