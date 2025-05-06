@@ -11,8 +11,11 @@ compares two directory trees telling you if they are identical.
 
 #### Features of the Rust Implementation
 
+* The Rust implementation does support soft links.
 * The Rust implementation is multithreaded.
 * The Rust implementation is tested.
+* The Rust implementation supports the `-d`, `-m`, `-p`, `-s` and `-t` flags.
+* The Rust implementation MAY have memory leaks, it has not been checked.
 
 &nbsp;
 
