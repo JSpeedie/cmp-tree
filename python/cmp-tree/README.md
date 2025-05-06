@@ -11,8 +11,11 @@ compares two directory trees telling you if they are identical.
 
 #### Features of the Python Implementation
 
-* The Python implementation is NOT multithreaded.
+* The Python implementation does support soft links.
 * The Python implementation is tested.
+* The Python implementation supports the `-m`, `-p`, and `-t` flags.
+* The Python implementation is NOT multithreaded.
+* The Python implementation MAY have memory leaks, it has not been checked.
 
 &nbsp;
 
@@ -30,7 +33,7 @@ pipenv install  # This will install all dependencies and setup up the virtual en
 ```bash
 cd python/cmp-tree
 # We use the following command to enter the virtual environment (which has the
-correct # version of python and all the dependencies)
+# all the dependencies)
 pipenv shell
 python cmp-tree.py [path-to-first-directory] [path-to-second-directory]
 ```
