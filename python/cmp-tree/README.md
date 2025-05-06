@@ -13,6 +13,8 @@ compares two directory trees telling you if they are identical.
 
 * The Python implementation does support soft links.
 * The Python implementation is tested.
+* The Python implementation returns an exit code that represents if the
+  directory trees differed or not.
 * The Python implementation supports the `-m`, `-p`, and `-t` flags.
 * The Python implementation is NOT multithreaded.
 * The Python implementation MAY have memory leaks, it has not been checked.
