@@ -35,6 +35,22 @@ char CYAN[] = { "\x1B[36m" };
 char WHITE[] = { "\x1B[37m" };
 
 
+/** Returns the default config for `cmp-tree`.
+ *
+ *  \return a `Config` struct with all its values set to the default values for
+ *      `cmp-tree`.
+ */
+Config default_config() {
+    /* {{{ */
+    return (Config) {
+        .matches = false,
+        .pretty = false,
+        .totals = false,
+    };
+    /* }}} */
+}
+
+
 /** Returns an unsorted vector list of relative file paths for all files (in
  * the broad sense of the word, including links and directories, as well as
  * hidden files) in a directory tree rooted at the directory pointed to by the
@@ -311,10 +327,175 @@ std::vector<FullFileComparison> compare_directory_trees( \
 }
 
 
+/** Takes a `std::vector<FullFileComparison>` and prints out the necessary
+ * information about the list of file comparisons. What information is printed
+ * will depend on the values of `&config`.
+ *
+ * \param `&config` a `Config` representing a configuration for executing
+ *     `cmp-tree`, usually modified through command line arguments to the
+ *     program.
+ * \param `directory_tree_comparison` a `std::vector<FullFileComparison>`.
+ *     Typically, this parameter is the result of a call to
+ *     `compare_directory_trees()`.
+ */
+void print_output(Config &config, \
+	std::vector<FullFileComparison> directory_tree_comparison) {
+	/* {{{ */
+
+	long max_num_file_matches = 0;
+	long max_num_dir_matches = 0;
+	long num_file_matches = 0;
+	long num_dir_matches = 0;
+
+	for (auto e: directory_tree_comparison) {
+		if (config.totals) {
+			if (e.partial_cmp.first_ft == fs::file_type::directory \
+				|| e.partial_cmp.second_ft == fs::file_type::directory) {
+
+				max_num_dir_matches++;
+			}
+			if (e.partial_cmp.first_ft == fs::file_type::regular \
+				|| e.partial_cmp.second_ft == fs::file_type::regular) {
+
+				max_num_file_matches++;
+			}
+		}
+
+		switch (e.partial_cmp.file_cmp) {
+			case MATCH:
+				if (config.matches) {
+					if (config.pretty) printf("%s%s", BOLD, GREEN);
+					printf("\"%s\" == \"%s\"\n",
+						e.first_path.c_str(), e.second_path.c_str());
+					if (config.pretty) printf("%s", NORMAL);
+				}
+				if (e.partial_cmp.first_ft == fs::file_type::regular) {
+					num_file_matches++;
+				} else if (e.partial_cmp.first_ft == fs::file_type::directory) {
+					num_dir_matches++;
+				}
+				break;
+			case MISMATCH_TYPE:
+				if (config.pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" is not of the same type as \"%s\"\n",
+					e.first_path.c_str(), e.second_path.c_str());
+				if (config.pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_CONTENT:
+				if (config.pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" differs from \"%s\"\n",
+					e.first_path.c_str(), e.second_path.c_str());
+				if (config.pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_NEITHER_EXISTS:
+				if (config.pretty) printf("%s%s", BOLD, RED);
+				printf("Neither \"%s\" nor \"%s\" exist\n",
+					e.first_path.c_str(), e.second_path.c_str());
+				if (config.pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_ONLY_FIRST_EXISTS:
+				if (config.pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" exists, but \"%s\" does NOT exist\n",
+					e.first_path.c_str(), e.second_path.c_str());
+				if (config.pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_ONLY_SECOND_EXISTS:
+				if (config.pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" does NOT exist, but \"%s\" does exist\n",
+					e.first_path.c_str(), e.second_path.c_str());
+				if (config.pretty) printf("%s", NORMAL);
+				break;
+		}
+	}
+
+	if (config.totals) {
+		fprintf(stdout, "All done!\n");
+		fprintf(stdout, "File byte-for-byte matches: %ld/%ld\n", \
+			num_file_matches, max_num_file_matches);
+		fprintf(stdout, "Directory matches: %ld/%ld\n", num_dir_matches, \
+			max_num_dir_matches);
+	}
+	/* }}} */
+}
+
+
+/** Takes a `std::vector<FullFileComparison>` and returns a boolean
+ * representing whether or not the file comparison list received as input
+ * contains any mismatches or not.
+ *
+ * \param `directory_tree_comparison` a `std::vector<FullFileComparison>`.
+ *     Typically, this parameter is the result of a call to
+ *     `compare_directory_trees()`.
+ * \return a `bool` that will be `true` if there were any mismatches in the
+ *     directory tree comparison and `false` if the comparison found the two
+ *     directory trees to be identical.
+ */
+bool directory_tree_comparison_contains_mismatch(
+	std::vector<FullFileComparison> directory_tree_comparison) {
+	/* {{{ */
+
+	/* For every comparison in the list... */
+	for (auto &e: directory_tree_comparison) {
+		/* If the comparison found a mismatch of any kind between the two
+		 * files, return early */
+		if (e.partial_cmp.file_cmp != MATCH) {
+			return true;
+		}
+	}
+	/* If we make it here, that means no mismatches of any kind were found in
+	 * the file comparison list. */
+	return false;
+	/* }}} */
+}
+
+
+/** Takes a `Config` and two `fs::path`s that point to two directory trees, and
+ * compares the two directory trees, returning an `int32_t` representing the
+ * appropriate exit code for this program given how the execution went.
+ *
+ * \param `&config` a `Config` representing a configuration for executing
+ *     `cmp-tree`, usually modified through command line arguments to the
+ *     program.
+ * \param `&first_dir` a file path that points to the root directory of the
+ *     first directory tree we wish to compare. This function assumes that this
+ *     path points to a directory and that the directory exists.
+ * \param `&second_dir` a file path that points to the root directory of the
+ *     second directory tree we wish to compare. This function assumes that
+ *     this path points to a directory and that the directory exists.
+ * \return an `int32_t` that represents how execution of the directory tree
+ *     comparison went. If there was an error during execution, 2 is returned.
+ *     If the comparison proceeded without error, but mismatches between files
+ *     were found, 1 is returned. If the comparison proceeeded without error
+ *     and no mismatches were found, 0 is returned.
+ */
+int32_t cmp_tree(Config &config, fs::path &first_dir, fs::path &second_dir) {
+	/* {{{ */
+	/* Perform the comparison between the two directory trees */
+	std::vector<FullFileComparison> directory_tree_comparison = \
+		compare_directory_trees(first_dir, second_dir);
+
+	/* Check if any mismatches occurred (this is needed to determine the exit
+	 * code of this program */
+	bool mismatch_occurred = directory_tree_comparison_contains_mismatch( \
+		directory_tree_comparison);
+	/* Print the appropriate output, provided silent mode is off */
+	print_output(config, directory_tree_comparison);
+
+	/* If a mismatch occurred during the comparison, exit with exit code 1. If
+	 * there were no mismatches, and the directory trees are identical, exit
+	 * with exit code 0. */
+	if (mismatch_occurred) {
+		return 1;
+	} else {
+		return 0;
+	}
+	/* }}} */
+}
+
+
 int main(int argc, char **argv) {
-	bool flag_print_totals = false;
-	bool flag_print_matches = false;
-	bool flag_pretty_output = false;
+
+	Config conf = default_config();
 
 	int opt;
 	struct option opt_table[] = {
@@ -327,9 +508,15 @@ int main(int argc, char **argv) {
 
 	while ((opt = getopt_long(argc, argv, opt_string, opt_table, NULL)) != -1) {
 		switch (opt) {
-			case 'm': flag_print_matches = true; break;
-			case 'p': flag_pretty_output = true; break;
-			case 't': flag_print_totals = true; break;
+			case 'm':
+				conf.matches = true;
+				break;
+			case 'p':
+				conf.pretty = true;
+				break;
+			case 't':
+				conf.totals = true;
+				break;
 		}
 	}
 
@@ -343,8 +530,7 @@ int main(int argc, char **argv) {
 	fs::path second_path(argv[optind]);
 	/* Create an array of arguments that specify directories so that
 	 * we can check their validity */
-	std::array<fs::path, 2> directory_args = \
-		{ first_path, second_path };
+	std::array<fs::path, 2> directory_args = { first_path, second_path };
 
 	/* Loop through all the arguments that specify directories and check that
 	 * they are valid */
@@ -365,80 +551,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	/* Compare the directory trees! */
-	auto comparisons = compare_directory_trees(first_path, second_path);
-
-	long max_num_file_matches = 0;
-	long max_num_dir_matches = 0;
-	long num_file_matches = 0;
-	long num_dir_matches = 0;
-
-	for (auto e: comparisons) {
-		if (flag_print_totals) {
-			if (e.partial_cmp.first_ft == fs::file_type::directory \
-				|| e.partial_cmp.second_ft == fs::file_type::directory) {
-
-				max_num_dir_matches++;
-			}
-			if (e.partial_cmp.first_ft == fs::file_type::regular \
-				|| e.partial_cmp.second_ft == fs::file_type::regular) {
-
-				max_num_file_matches++;
-			}
-		}
-
-		switch (e.partial_cmp.file_cmp) {
-			case MATCH:
-				if (flag_print_matches) {
-					if (flag_pretty_output) printf("%s%s", BOLD, GREEN);
-					printf("\"%s\" == \"%s\"\n",
-						e.first_path.c_str(), e.second_path.c_str());
-					if (flag_pretty_output) printf("%s", NORMAL);
-				}
-				if (e.partial_cmp.first_ft == fs::file_type::regular) {
-					num_file_matches++;
-				} else if (e.partial_cmp.first_ft == fs::file_type::directory) {
-					num_dir_matches++;
-				}
-				break;
-			case MISMATCH_TYPE:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" is not of the same type as \"%s\"\n",
-					e.first_path.c_str(), e.second_path.c_str());
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_CONTENT:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" differs from \"%s\"\n",
-					e.first_path.c_str(), e.second_path.c_str());
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_NEITHER_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("Neither \"%s\" nor \"%s\" exist\n",
-					e.first_path.c_str(), e.second_path.c_str());
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_ONLY_FIRST_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" exists, but \"%s\" does NOT exist\n",
-					e.first_path.c_str(), e.second_path.c_str());
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_ONLY_SECOND_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" does NOT exist, but \"%s\" does exist\n",
-					e.first_path.c_str(), e.second_path.c_str());
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-		}
-	}
-
-	if (flag_print_totals) {
-		fprintf(stdout, "All done!\n");
-		fprintf(stdout, "File byte-for-byte matches: %ld/%ld\n", \
-			num_file_matches, max_num_file_matches);
-		fprintf(stdout, "Directory matches: %ld/%ld\n", num_dir_matches, \
-			max_num_dir_matches);
-	}
+	int32_t exit_code = cmp_tree(conf, first_path, second_path);
+	exit(exit_code);
 }
