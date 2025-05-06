@@ -117,6 +117,23 @@ void destroy_function_FullFileComparison(void *ffc) {
 /* }}} */
 
 
+/** Takes 2 strings and returns 0 if they are entirely equal.
+ *
+ * This function came to be because it seems to me that `strncmp()` can not be
+ * trusted as a means of truly testing the equality of two strings. For
+ * example, if we have 2 strings, "hello" and "hello world" and we ask
+ * `strncmp()` to compare them but give 5 for the `n` we pass to `strncmp()`,
+ * then I believe `strncmp()` will return 0, indicating that it has found the 2
+ * strings to be equal. Obviously, they are not equal - one is a substring of
+ * the other. To properly test for equality, we need to check that the length
+ * of the two strings is equal and then check the result of `strncmp()`.
+ *
+ * \param `*s1` the first string we wish to compare.
+ * \param `*s2` the second string we wish to compare.
+ * \return an int representing whether or not the strings are equal. This
+ *     function will return 0 if the strings are found to be equal and -1
+ *     otherwise.
+ */
 int str_eq(char *s1, char *s2) {
 	/* {{{ */
 	if (strlen(s1) == strlen(s2) && 0 == strncmp(s1, s2, strlen(s1))) {
@@ -128,23 +145,41 @@ int str_eq(char *s1, char *s2) {
 }
 
 
+/** Takes 2 `String`s representing file paths, a `*root` and an `*extension`,
+ * and returns a new `String` representing a new path where `*root` was joined
+ * with `*extension`.
+ *
+ * NOTE: This function inserts a Unix-style "/" to denote a directory in a
+ * path.
+ *
+ * NOTE: This function will not check to see if `*root` or `*extension` are
+ * valid Unix-style paths - it will assume that they are.
+ *
+ * NOTE: `*root` can end in a "/" or not, this function will work regardless.
+ *
+ * \param `*root` the root of the path we want to create.
+ * \param `*extension` the extension of the path we want to create.
+ * \return a new `malloc()`'d `String` representing `*root` extended by
+ *     `*extension`. The returned `String` must be freed by the caller of this
+ *     function.
+ */
 String *path_extend(String *root, String *extension) {
 	/* {{{ */
 	String *ret = malloc(sizeof(String));
 
-	/* If the root is empty, return a copy of '*extension' */
+	/* If the root is empty, return a copy of `*extension` */
 	if (0 == root->length) {
 		duplicate_string(ret, extension);
 		return ret;
 	}
 
-	/* If the extension is empty, return a copy of '*root' */
+	/* If the extension is empty, return a copy of `*root` */
 	if (0 == extension->length) {
 		duplicate_string(ret, root);
 		return ret;
 	}
 
-	/* Return the extended path, inserting a '/' if '*root' does not already
+	/* Return the extended path, inserting a '/' if `*root` does not already
 	 * include one */
 	if (root->data[root->length - 1] == '/') {
 		ret->data = malloc(root->length + extension->length + 1);
@@ -171,7 +206,7 @@ String *path_extend(String *root, String *extension) {
 /** Returns an int representing whether the given file path points to a
  * directory or not.
  *
- * \param '*file_path' the file path to the (possible) directory to be checked.
+ * \param `*file_path` the file path to the (possible) directory to be checked.
  * \return negative int if there was an error, 0 if the file path leads to a
  *     directory, 1 if it does not.
  */
@@ -188,7 +223,7 @@ int is_dir(char *file_path) {
 		return 0;
 	}
 
-	/* If we make it to this line, '*file_path' does NOT point to a dir */
+	/* If we make it to this line, `*file_path` does NOT point to a dir */
 	return 1;
 	/* }}} */
 }
@@ -197,7 +232,7 @@ int is_dir(char *file_path) {
 /** Returns an int representing whether the file (understood in the broad
  * sense) pointed to by the given path points to a file that exists.
  *
- * \param '*file_path' the file path to the (possible) file (understood in the
+ * \param `*file_path` the file path to the (possible) file (understood in the
  *     broad sense) whose existence we wish to check.
  * \return negative int if there was an error or if the file path leads to a
  *     file which does not exist, and 0 if the file path leads to a file which
@@ -214,16 +249,42 @@ int exists(char *file_path) {
 }
 
 
-/** Returns an int representing the mode (or type) of the file pointed to by
- * the file path '*file_path'.
+/** Returns the default config for `cmp-tree`.
  *
- * \param '*file_path' a file path which points to the file we wish to get the
+ *  \return a `Config` struct with all its values set to the default values for
+ *      `cmp-tree`.
+ */
+Config default_config() {
+    /* {{{ */
+    return (Config) {
+        .matches = false,
+        .pretty = false,
+        .totals = false,
+    };
+    /* }}} */
+}
+
+
+/** Modifies `*ret` to represent the mode (or type) of the file pointed to by
+ * the file path `*file_path`. Returns an `int` representing whether this
+ * function experienced an error or succeeded.
+ *
+ * \param `*file_path` a file path which points to the file we wish to get the
  *     file mode of.
- * \param '*ret' a return variable which (on success) will be modified to
+ * \param `*ret` a return variable which (on success) will be modified to
  *     contain an unsigned integer representing the mode (or type) of the file.
- *     This value can be compared to the 'S_IFDIR', 'S_IFREG', etc. constants
+ *     This value can be compared to the `S_IFDIR`, `S_IFREG`, etc. constants
  *     provided by <sys/stat.h> to confirm which type the file is.
  * \return negative int if there was an error, 0 on success.
+ *
+ * EXAMPLE:
+ * ```
+ * char *some_path = "/home/username/";
+ * unsigned int ret_var;
+ * if (get_file_mode(some_path, &ret_var) == S_IFDIR) {
+ *     printf("`some_path` points to a directory!\n");
+ * }
+ * ```
  */
 int get_file_mode(char *file_path, unsigned int *ret) {
 	/* {{{ */
@@ -240,20 +301,29 @@ int get_file_mode(char *file_path, unsigned int *ret) {
 }
 
 
-/** Returns an unsorted vector list of file names for all files (including
- * hidden files) in a directory tree rooted at the directory pointed to by
- * '&dir_path'. Paths will be missing their dirname so as to facilitate
- * appending these relative filepaths to both the first directory tree root
- * and the second directory tree root.
+/** Intended as a helper function for `files_in_tree()`. Returns a
+ * `DynamicArray<String>` representing a list of relative file paths for all
+ * files (in the broad sense of the word, including links and directories, as
+ * well as hidden files) in a directory tree rooted at the directory pointed to
+ * by the path `*root` joined with the path `*extension`. The file paths
+ * included in the list will all begin with `*extension`, but not with `*root`.
+ * This function is recursive, and it is often made use of by calling it with
+ * `*root` as a path to a directory that roots a directory tree and with
+ * `extension` set to an empty ("") path.
  *
- * \param '*root' the file path to the directory tree root.
- * \param '*extension' a relative file path that when added to the '*root'
- *    file path (using 'path_extend()') creates a full file path to the current
- *    directory which will have its contents added to the return array.
- * \return an unsorted vector list of the relative file paths for all the files
- *     in the directory tree rooted at the file path created by extending
- *     '*root' with '*extension'.
+ * \param `*root` the beginning of the file path to the directory for which we
+ *     wish to get a list of all the files in the directory tree. It will be
+ *     combined with `*extension` to produce the complete path.
+ * \param `*extension` the end of the file path to the directory for which we
+ *     wish to get a list of all the files in the directory tree. It will be
+ *     combined with `*root` to produce the complete path. `*extension` can be
+ *     an empty path.
+ * \return an unsorted `DynamicArray<String>` representing a list of the
+ *     relative file paths for all the files in the directory tree rooted at
+ *     `*root` joined with `*extension`. The file paths included in the list
+ *     will omit `*root` from their path, but include `*extension`.
  */
+/* DynamicArray<String> */
 DynamicArray relative_files_in_tree(String *root, String *extension) {
 	/* {{{ */
 	/* DynamicArray<String> */
@@ -300,18 +370,37 @@ DynamicArray relative_files_in_tree(String *root, String *extension) {
 }
 
 
-// TODO: update doc from copy paste from cpp
-/** Takes two paths and returns 0 if the files are byte-for-byte identical,
- * and -1 if they are not. Both file paths must point to regular files and
- * both regular files must exist.
+/** Returns an unsorted `DynamicArray<String>` representing a list of relative
+ * file paths for all the files (in the broad sense of the word, including
+ * links and directories, as well as hidden files) in a directory tree rooted
+ * at the directory pointed to by `*root`.
  *
- * \param '&first_path' a file path that points to the first file we wish to
- *     compare.
- * \param '&second_path' a file path that points to the second file we wish to
- *     compare.
- * \return 0 if they files are byte-for-byte identical, -1 otherwise.
+ * \param `*root` the file path to the directory for which we wish to get a
+ *     list of all the files in the directory tree.
+ * \return an unsorted `DynamicArray<String>` representing a list of the
+ *     relative file paths for all the files in the directory tree rooted at
+ *     `*root`.
  */
-int compare_files(char * first_path, char * second_path) {
+/* `DynamicArray<String>` */
+DynamicArray files_in_tree(String *root) {
+	/* {{{ */
+	String *extension = create_string("");
+	return relative_files_in_tree(root, extension);
+	/* }}} */
+}
+
+
+/** Takes two strings representing file paths and returns an `int` representing
+ * how the files compare. Both file paths must point to regular files and both
+ * regular files must exist.
+ *
+ * \param `*first_path` a file path that points to the first file we wish to
+ *     compare.
+ * \param `*second_path` a file path that points to the second file we wish to
+ *     compare.
+ * \return 0 on success and -1 on failure.
+ */
+int compare_files(char *first_path, char *second_path) {
 	/* {{{ */
 	/* Check if the files differ in size. If they do, they cannot be
 	 * byte-for-byte identical */
@@ -372,35 +461,17 @@ int compare_files(char * first_path, char * second_path) {
 }
 
 
-/** Returns an unsorted vector list file paths for all the files (in the broad
- * sense of the word, including links and directories, as well as hidden
- * regular files) in a directory tree rooted at the directory pointed to by
- * '&root'.
+/** Takes two `String`s representing two file paths and returns a
+ * `PartialFileComparison` that represents how the two files (understood in the
+ * broad sense) pointed to by the two paths compare.
  *
- * \param '&dir_path' the file path to the directory for which we wish to get
- *     a list of all the files in the directory tree.
- * \return an unsorted vector list of the relative file paths for all the files
- *     in the directory tree rooted at '&root'.
- */
-DynamicArray files_in_tree(String *root) {
-	/* {{{ */
-	String *extension = create_string("");
-	return relative_files_in_tree(root, extension);
-	/* }}} */
-}
-
-
-/** Takes two paths and returns an bool that represents whether
- * the two files pointed to by the two paths are the same or different. If the
- * first member in the tuple is 0, the 2 paths point to identical files (in the
- * broad sense of the word).
- *
- * \param '&first_path' a file path that points to the first file we wish to
+ * \param `*first_path` a file path that points to the first file we wish to
  *     compare.
- * \param '&second_path' a file path that points to the second file we wish to
+ * \param `*second_path` a file path that points to the second file we wish to
  *     compare.
- * \return a file path that points to the second file we wish to
- *     compare.
+ * \return a `PartialFileComparison` that represents whether the two files are
+ *     equivalent, if they differ and how they differ, as well as the two file
+ *     types of the files.
  */
 PartialFileComparison compare_path(String *first_path, String *second_path) {
 	/* {{{ */
@@ -435,6 +506,7 @@ PartialFileComparison compare_path(String *first_path, String *second_path) {
 		return ret;
 	}
 
+	// TODO: I believe this is erroneous. Regular files with not use `cmp`, that was the old approach
 	/* Check that the two files are equivalent. At this point we know both
 	 * files exist and that they are of the same type. The various types the
 	 * files could both be need individual methods for checking equivalence.
@@ -465,13 +537,15 @@ PartialFileComparison compare_path(String *first_path, String *second_path) {
 }
 
 
-/** Helper function for compressing a file through multiple threads */
+/** The function each thread started in `compare_directory_trees()` will
+ * execute */
 void *compare_directory_trees_thread(void *arg) {
+	/* {{{ */
 	CDTThreadArgs *t = (CDTThreadArgs *) arg;
 
 	/* Go through the assigned files in the combined  file list, create two
-	 * full paths to the file, one rooted at '&first_root', one rooted at
-	 * '&second_root', and compare them */
+	 * full paths to the file, one rooted at `t->first_root`, one rooted at
+	 * `t->second_root`, and compare them */
 	for (size_t i = t->start; i <= t->end; i++) {
 		String *first_file = \
 			path_extend(t->first_root, (String *) (t->rel_paths[i]));
@@ -486,23 +560,27 @@ void *compare_directory_trees_thread(void *arg) {
 	}
 
 	return NULL;
+	/* }}} */
 }
 
 
-/** Returns an unsorted vector list of tuples where the first member represents
- * the result of a comparison between the file represented by the second member
- * and the file represented by the third member. If the first member is 0,
- * the files pointed to by the second and third members are byte-for-byte
- * identical. If the first member is negative, there was an error, and if the
- * first member is positive, the files were different in some way.
+/** Takes two `String`s representing two file paths, each pointing to
+ * directories that root directory trees, and returns a
+ * `DynamicArray<FullFileComparison>` that represents a list of comparisons
+ * between all files in the directory trees.
  *
- * \param 'file_path' the file path to the (possible) directory to be checked.
- * \return negative int if there was an error, 0 if the file path leads to a
- *     directory, 1 if it does not.
+ * \param `*first_root` a file path that points to the root directory of the
+ *     first directory tree we wish to compare.
+ * \param `*second_root` a file path that points to the root directory of the
+ *     second directory tree we wish to compare.
+ * \return a sorted `DynamicArray<FullFileComparison>` representing a list of
+ *     all the file comparisons that were performed during the comparison of
+ *     the two directory trees.
  */
 /* DynamicArray<FullFileComparison> */
 DynamicArray *compare_directory_trees(String *first_root, \
 	String * second_root) {
+	/* {{{ */
 
 	/* Get the first directory file list and the second directory file list:
 	 * the list of files in each directory */
@@ -542,11 +620,10 @@ DynamicArray *compare_directory_trees(String *first_root, \
 	// multithreading to 1 thread, this program still does a lot of weird setup
 	// work for that 1 thread that it doesn't have to do... if it's only 1
 	// thread. I should test it back in original single threaded mode to see
-	// what's up. For now though, max-core multithreading gives me a 185->165
-	// millisecond improvement
+	// what's up.
 
 	// TODO: remove
-	number_of_processors = 1;
+	/* number_of_processors = 1; */
 
 	/* If we divide all the paths among all the cores of the machine and
 	 * that exceeds the minimum number of comparisons each thread must make,
@@ -610,13 +687,158 @@ DynamicArray *compare_directory_trees(String *first_root, \
 	ret->length = combined_ft.length;
 
 	return ret;
+	/* }}} */
+}
+
+
+/** Takes a `DynamicArray<FullFileComparison>` and prints out the necessary
+ * information about the list of file comparisons. What information is printed
+ * will depend on the values of `*config`.
+ *
+ * \param `*config` a `Config` representing a configuration for executing
+ *     `cmp-tree`, usually modified through command line arguments to the
+ *     program.
+ * \param `*directory_tree_comparison` a DynamicArray<FullFileComparison>`.
+ *     Typically, this parameter is the result of a call to
+ *     `compare_directory_trees()`.
+ */
+void print_output(Config *config, DynamicArray *directory_tree_comparison) {
+	/* {{{ */
+	long max_num_file_matches = 0;
+	long max_num_dir_matches = 0;
+	long num_file_matches = 0;
+	long num_dir_matches = 0;
+
+	for (int i = 0; i < directory_tree_comparison->length; i++) {
+		FullFileComparison *ffc = \
+			(FullFileComparison *) directory_tree_comparison->array[i];
+
+		if (config->totals) {
+			if (ffc->partial_cmp.first_fm == S_IFDIR \
+				|| ffc->partial_cmp.second_fm == S_IFDIR) {
+
+				max_num_dir_matches++;
+			}
+			if (ffc->partial_cmp.first_fm == S_IFREG \
+				|| ffc->partial_cmp.second_fm == S_IFREG) {
+
+				max_num_file_matches++;
+			}
+		}
+
+		switch (ffc->partial_cmp.file_cmp) {
+			case MATCH:
+				if (config->matches) {
+					if (config->pretty) printf("%s%s", BOLD, GREEN);
+					printf("\"%s\" == \"%s\"\n",
+						ffc->first_path.data, ffc->second_path.data);
+					if (config->pretty) printf("%s", NORMAL);
+				}
+				if (ffc->partial_cmp.first_fm == S_IFREG) {
+					num_file_matches++;
+				} else if (ffc->partial_cmp.first_fm == S_IFDIR) {
+					num_dir_matches++;
+				}
+				break;
+			case MISMATCH_TYPE:
+				if (config->pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" is not of the same type as \"%s\"\n",
+					ffc->first_path.data, ffc->second_path.data);
+				if (config->pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_CONTENT:
+				if (config->pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" differs from \"%s\"\n",
+					ffc->first_path.data, ffc->second_path.data);
+				if (config->pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_NEITHER_EXISTS:
+				if (config->pretty) printf("%s%s", BOLD, RED);
+				printf("Neither \"%s\" nor \"%s\" exist\n",
+					ffc->first_path.data, ffc->second_path.data);
+				if (config->pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_ONLY_FIRST_EXISTS:
+				if (config->pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" exists, but \"%s\" does NOT exist\n",
+					ffc->first_path.data, ffc->second_path.data);
+				if (config->pretty) printf("%s", NORMAL);
+				break;
+			case MISMATCH_ONLY_SECOND_EXISTS:
+				if (config->pretty) printf("%s%s", BOLD, RED);
+				printf("\"%s\" does NOT exist, but \"%s\" does exist\n",
+					ffc->first_path.data, ffc->second_path.data);
+				if (config->pretty) printf("%s", NORMAL);
+				break;
+		}
+	}
+
+	if (config->totals) {
+		fprintf(stdout, "All done!\n");
+		fprintf(stdout, "File byte-for-byte matches: %ld/%ld\n", \
+			num_file_matches, max_num_file_matches);
+		fprintf(stdout, "Directory matches: %ld/%ld\n", num_dir_matches, \
+			max_num_dir_matches);
+	}
+	/* }}}*/
+}
+
+
+/** Takes a `Config` and two `String`s (representing paths) that point to two
+ * directory trees, and compares the two directory trees, returning an
+ * `int32_t` representing the appropriate exit code for this program given how
+ * the execution went.
+ *
+ * \param `*config` a `Config` representing a configuration for executing
+ *     `cmp-tree`, usually modified through command line arguments to the
+ *     program.
+ * \param `*first_dir` a file path that points to the root directory of the
+ *     first directory tree we wish to compare. This function assumes that this
+ *     path points to a directory and that the directory exists.
+ * \param `*second_dir` a file path that points to the root directory of the
+ *     second directory tree we wish to compare. This function assumes that
+ *     this path points to a directory and that the directory exists.
+ * \return an `int32_t` that represents how execution of the directory tree
+ *     comparison went. If there was an error during execution, 2 is returned.
+ *     If the comparison proceeded without error, but mismatches between files
+ *     were found, 1 is returned. If the comparison proceeeded without error
+ *     and no mismatches were found, 0 is returned.
+ */
+int32_t cmp_tree(Config *config, String *first_dir, String *second_dir) {
+	/* {{{ */
+	/* Perform the comparison between the two directory trees */
+	/* DynamicArray<FullFileComparison> */
+	DynamicArray *comparisons = \
+		compare_directory_trees(first_dir, second_dir);
+
+	// TODO:
+	/* Check if any mismatches occurred (this is needed to determine the exit code of this program
+	* */
+	/* let mismatch_occurred = */
+	/*     directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res); */
+	/* Print the appropriate output, provided silent mode is off */
+	print_output(config, comparisons);
+
+	// TODO:
+	/* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
+	* mismatches, and the directory trees are identical, exit with exit code 0. If there was an
+	* error in assessing whether there was any mismatch in the directory tree comparison, exit
+	* with exit code 2. */
+	/* match mismatch_occurred { */
+	/*     Ok(true) => return 1, */
+	/*     Ok(false) => return 0, */
+	/*     Err(_) => return 2, */
+	/* } */
+
+	// TODO:
+	return 0;
+	/* }}} */
 }
 
 
 int main(int argc, char **argv) {
-	bool flag_print_totals = false;
-	bool flag_print_matches = false;
-	bool flag_pretty_output = false;
+
+	Config conf = default_config();
 
 	int opt;
 	struct option opt_table[] = {
@@ -629,9 +851,15 @@ int main(int argc, char **argv) {
 
 	while ((opt = getopt_long(argc, argv, opt_string, opt_table, NULL)) != -1) {
 		switch (opt) {
-			case 'm': flag_print_matches = true; break;
-			case 'p': flag_pretty_output = true; break;
-			case 't': flag_print_totals = true; break;
+			case 'm':
+				conf.matches = true;
+				break;
+			case 'p':
+				conf.pretty = true;
+				break;
+			case 't':
+				conf.totals = true;
+				break;
 		}
 	}
 
@@ -661,83 +889,6 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	/* Compare the directory trees! */
-	DynamicArray *comparisons = \
-		compare_directory_trees(first_path, second_path);
-
-	long max_num_file_matches = 0;
-	long max_num_dir_matches = 0;
-	long num_file_matches = 0;
-	long num_dir_matches = 0;
-
-	for (int i = 0; i < comparisons->length; i++) {
-		FullFileComparison *ffc = (FullFileComparison *) comparisons->array[i];
-
-		if (flag_print_totals) {
-			if (ffc->partial_cmp.first_fm == S_IFDIR \
-				|| ffc->partial_cmp.second_fm == S_IFDIR) {
-
-				max_num_dir_matches++;
-			}
-			if (ffc->partial_cmp.first_fm == S_IFREG \
-				|| ffc->partial_cmp.second_fm == S_IFREG) {
-
-				max_num_file_matches++;
-			}
-		}
-
-		switch (ffc->partial_cmp.file_cmp) {
-			case MATCH:
-				if (flag_print_matches) {
-					if (flag_pretty_output) printf("%s%s", BOLD, GREEN);
-					printf("\"%s\" == \"%s\"\n",
-						ffc->first_path.data, ffc->second_path.data);
-					if (flag_pretty_output) printf("%s", NORMAL);
-				}
-				if (ffc->partial_cmp.first_fm == S_IFREG) {
-					num_file_matches++;
-				} else if (ffc->partial_cmp.first_fm == S_IFDIR) {
-					num_dir_matches++;
-				}
-				break;
-			case MISMATCH_TYPE:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" is not of the same type as \"%s\"\n",
-					ffc->first_path.data, ffc->second_path.data);
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_CONTENT:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" differs from \"%s\"\n",
-					ffc->first_path.data, ffc->second_path.data);
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_NEITHER_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("Neither \"%s\" nor \"%s\" exist\n",
-					ffc->first_path.data, ffc->second_path.data);
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_ONLY_FIRST_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" exists, but \"%s\" does NOT exist\n",
-					ffc->first_path.data, ffc->second_path.data);
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-			case MISMATCH_ONLY_SECOND_EXISTS:
-				if (flag_pretty_output) printf("%s%s", BOLD, RED);
-				printf("\"%s\" does NOT exist, but \"%s\" does exist\n",
-					ffc->first_path.data, ffc->second_path.data);
-				if (flag_pretty_output) printf("%s", NORMAL);
-				break;
-		}
-	}
-
-	if (flag_print_totals) {
-		fprintf(stdout, "All done!\n");
-		fprintf(stdout, "File byte-for-byte matches: %ld/%ld\n", \
-			num_file_matches, max_num_file_matches);
-		fprintf(stdout, "Directory matches: %ld/%ld\n", num_dir_matches, \
-			max_num_dir_matches);
-	}
+	int32_t exit_code = cmp_tree(&conf, first_path, second_path);
+	exit(exit_code);
 }
