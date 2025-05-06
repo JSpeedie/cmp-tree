@@ -111,6 +111,7 @@ mapfile -t COMBINED_DIR_FILE_LIST < <( (printf '%s\n' "${FIRST_DIR_FILE_LIST[@]}
 # printf '%s\n' "${COMBINED_DIR_FILE_LIST[@]}"
 # exit 0
 
+let NUM_MISMATCHES=0
 let NUM_FILE_MATCHES=0
 let MAX_NUM_FILE_MATCHES=0
 let NUM_DIR_MATCHES=0
@@ -135,6 +136,7 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 		second_file_file_size=$(stat -c %s "$D2_FILE")
 		if [ $first_file_file_size -ne $second_file_file_size ]; then
 			printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
+			let NUM_MISMATCHES+=1
 		else
 			# If the file as it exists in the first directory tree is byte-for-byte
 			# identical to the file as it exists in the second directory tree
@@ -143,6 +145,7 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 				let NUM_FILE_MATCHES+=1
 			else
 				printf "${bold}${red}\"${D1_FILE}\" differs from \"${D2_FILE}\"${end}\n" >&2
+				let NUM_MISMATCHES+=1
 			fi
 		fi
 	# TODO: these two 'elif's should maybe be reduced to one 'elif' that simply
@@ -152,9 +155,11 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 	# If the current file exists only in the first directory tree
 	elif [ -f "$D1_FILE" ] && [ ! -f "$D2_FILE" ]; then
 		printf "${red}\"${D1_FILE}\" exists, but \"${D2_FILE}\" does NOT exist${end}\n" >&2
+		let NUM_MISMATCHES+=1
 	# If the current file exists only in the second directory tree
 	elif [ ! -f "$D1_FILE" ] && [ -f "$D2_FILE" ]; then
 		printf "${red}\"${D1_FILE}\" exists, but \"${D2_FILE}\" does NOT exist${end}\n" >&2
+		let NUM_MISMATCHES+=1
 	else
 		# If the current file is actually a directory, but the directory exists
 		# in both directory trees
@@ -163,6 +168,7 @@ for i in ${!COMBINED_DIR_FILE_LIST[@]}; do
 			let NUM_DIR_MATCHES+=1
 		else
 			printf "${red}\"${D1_FILE}\" mismatches \"${D2_FILE}\" in some way. Perhaps one or both of them are neither files nor directories?${end}\n" >&2
+			let NUM_MISMATCHES+=1
 		fi
 	fi
 done
@@ -170,3 +176,11 @@ done
 printf "All done!\n"
 printf "File byte-for-byte matches: ${NUM_FILE_MATCHES}/${MAX_NUM_FILE_MATCHES}\n"
 printf "Directory matches: ${NUM_DIR_MATCHES}/${MAX_NUM_DIR_MATCHES}\n"
+
+# If there were any mismatches
+if [[ "${NUM_MISMATCHES}" -gt 0 ]]; then
+	# Exit with exit code 1
+	exit 1
+else
+	exit 0
+fi
