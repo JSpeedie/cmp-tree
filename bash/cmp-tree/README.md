@@ -7,6 +7,8 @@ compares two directory trees telling you if they are identical.
 
 #### Features of the Bash Implementation
 
+* The Bash implementation does NOT return an exit code that represents if the
+  directory trees differed or not.
 * The Bash implementation does NOT support any flags.
 * The Bash implementation does NOT support soft links.
 * The Bash implementation is NOT multithreaded.
