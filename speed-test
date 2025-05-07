@@ -7,59 +7,117 @@ second_dir="/home/me/kingston2"
 # first_dir="/home/me/Books1/"
 # second_dir="/home/me/Books2"
 
+# If the 0th commandline argument is a non-empty string
+if [[ -n "$0" ]]; then
+	if [[ "$0" != "./speed-test" ]] && [[ "$0" != "speed-test" ]]; then
+		# This script runs a series of `cd` commands and makes reaches up the
+		# directory tree. In order to make do these successfully, the script
+		# must be ran in a certain manner and specifically it must be launched
+		# from the directory it resides in.
+		echo "ERROR: This script must be launched from the directory it resides in."
+		echo "Acceptable ways of launching the script are:"
+		echo "    speed-test"
+		echo "    ./speed-test"
+		echo "Exiting..."
+		exit 1
+	fi
+fi
+
 bash_tests() {
 	# {{{
-	echo "Running Bash version of cmp-tree $num_calls times..."
-	start=$(date +%s.%N)
+	cd bash/cmp-tree
+	# Check that our executable is available and working
+	let tests_passed=0
+	# This command should succeed
+	if ./cmp-tree ../../tests/001/first ../../tests/001/first &> /dev/null; then
+		let tests_passed+=1
+	fi
+	if [ $tests_passed -ge 1 ]; then
+		echo "Running Bash version of cmp-tree $num_calls times..."
+		printf "" > ../../speed-test.bash.out
+		start=$(date +%s.%N)
 
-	for i in $(seq $num_calls); do
-		bash/cmp-tree/cmp-tree ${first_dir} ${second_dir} &>2
-	done
+		for i in $(seq $num_calls); do
+			./cmp-tree ${first_dir} ${second_dir} >> ../../speed-test.bash.out
+		done
 
-	end=$(date +%s.%N)
-	total_execution_time=$(echo "$end - $start" | bc -l)
-	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+		end=$(date +%s.%N)
+		total_execution_time=$(echo "$end - $start" | bc -l)
+		average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
 
-	echo "cmp-tree (Bash): $num_calls calls took a total of ${total_execution_time}s"
-	echo "cmp-tree (Bash): On average, each execution took ${average_execution_time}s"
+		echo "cmp-tree (Bash): $num_calls calls took a total of ${total_execution_time}s"
+		echo "cmp-tree (Bash): On average, each execution took ${average_execution_time}s"
+	else
+		echo "ERROR: Bash version of cmp-tree either does not exist or is not working correctly. Skipping..."
+	fi
+
+	cd ../..
 	# }}}
 }
 
 
 cpp_tests() {
 	# {{{
-	echo "Running C++ version of cmp-tree $num_calls times..."
-	start=$(date +%s.%N)
+	cd cpp/cmp-tree
+	# Check that our executable is available and working
+	let tests_passed=0
+	# This command should succeed
+	if ./release/cmp-tree ../../tests/001/first ../../tests/001/first &> /dev/null; then
+		let tests_passed+=1
+	fi
+	if [ $tests_passed -ge 1 ]; then
+		echo "Running C++ version of cmp-tree $num_calls times..."
+		printf "" > ../../speed-test.cpp.out
+		start=$(date +%s.%N)
 
-	for i in $(seq $num_calls); do
-		cpp/cmp-tree/cmp-tree ${first_dir} ${second_dir} 1>&2
-	done
+		for i in $(seq $num_calls); do
+			./release/cmp-tree ${first_dir} ${second_dir} >> ../../speed-test.cpp.out
+		done
 
-	end=$(date +%s.%N)
-	total_execution_time=$(echo "$end - $start" | bc -l)
-	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+		end=$(date +%s.%N)
+		total_execution_time=$(echo "$end - $start" | bc -l)
+		average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
 
-	echo "cmp-tree (C++): $num_calls calls took a total of ${total_execution_time}s"
-	echo "cmp-tree (C++): On average, each execution took ${average_execution_time}s"
+		echo "cmp-tree (C++): $num_calls calls took a total of ${total_execution_time}s"
+		echo "cmp-tree (C++): On average, each execution took ${average_execution_time}s"
+	else
+		echo "ERROR: C++ version of cmp-tree either does not exist or is not working correctly. Skipping..."
+	fi
+
+	cd ../..
 	# }}}
 }
 
 
 c_tests() {
 	# {{{
-	echo "Running C version of cmp-tree $num_calls times..."
-	start=$(date +%s.%N)
+	cd c/cmp-tree
+	# Check that our executable is available and working
+	let tests_passed=0
+	# This command should succeed
+	if ./release/cmp-tree ../../tests/001/first ../../tests/001/first &> /dev/null; then
+		let tests_passed+=1
+	fi
+	if [ $tests_passed -ge 1 ]; then
+		echo "Running C version of cmp-tree $num_calls times..."
+		printf "" > ../../speed-test.c.out
+		start=$(date +%s.%N)
 
-	for i in $(seq $num_calls); do
-		c/cmp-tree/cmp-tree ${first_dir} ${second_dir} 1>&2
-	done
+		for i in $(seq $num_calls); do
+			./release/cmp-tree ${first_dir} ${second_dir} >> ../../speed-test.c.out
+		done
 
-	end=$(date +%s.%N)
-	total_execution_time=$(echo "$end - $start" | bc -l)
-	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+		end=$(date +%s.%N)
+		total_execution_time=$(echo "$end - $start" | bc -l)
+		average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
 
-	echo "cmp-tree (C): $num_calls calls took a total of ${total_execution_time}s"
-	echo "cmp-tree (C): On average, each execution took ${average_execution_time}s"
+		echo "cmp-tree (C): $num_calls calls took a total of ${total_execution_time}s"
+		echo "cmp-tree (C): On average, each execution took ${average_execution_time}s"
+	else
+		echo "ERROR: C version of cmp-tree either does not exist or is not working correctly. Skipping..."
+	fi
+
+	cd ../..
 	# }}}
 }
 
@@ -67,19 +125,31 @@ c_tests() {
 rust_tests() {
 	# {{{
 	cd rust/cmp-tree
-	echo "Running Rust version of cmp-tree $num_calls times..."
-	start=$(date +%s.%N)
+	# Check that our executable is available and working
+	let tests_passed=0
+	# This command should succeed
+	if ./target/release/cmp-tree ../../tests/001/first ../../tests/001/first &> /dev/null; then
+		let tests_passed+=1
+	fi
+	if [ $tests_passed -ge 1 ]; then
+		echo "Running Rust version of cmp-tree $num_calls times..."
+		printf "" > ../../speed-test.rust.out
+		start=$(date +%s.%N)
 
-	for i in $(seq $num_calls); do
-		target/release/cmp-tree ${first_dir} ${second_dir} 1>&2
-	done
+		for i in $(seq $num_calls); do
+			./target/release/cmp-tree ${first_dir} ${second_dir} >> ../../speed-test.rust.out
+		done
 
-	end=$(date +%s.%N)
-	total_execution_time=$(echo "$end - $start" | bc -l)
-	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+		end=$(date +%s.%N)
+		total_execution_time=$(echo "$end - $start" | bc -l)
+		average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
 
-	echo "cmp-tree (Rust): $num_calls calls took a total of ${total_execution_time}s"
-	echo "cmp-tree (Rust): On average, each execution took ${average_execution_time}s"
+		echo "cmp-tree (Rust): $num_calls calls took a total of ${total_execution_time}s"
+		echo "cmp-tree (Rust): On average, each execution took ${average_execution_time}s"
+	else
+		echo "ERROR: Rust version of cmp-tree either does not exist or is not working correctly. Skipping..."
+	fi
+
 	cd ../..
 	# }}}
 }
@@ -88,19 +158,31 @@ rust_tests() {
 python_tests() {
 	# {{{
 	cd python/cmp-tree
-	echo "Running Python version of cmp-tree $num_calls times..."
-	start=$(date +%s.%N)
+	# Check that our executable is available and working
+	let tests_passed=0
+	# This command should succeed
+	if python cmp-tree.py ../../tests/001/first ../../tests/001/first &> /dev/null; then
+		let tests_passed+=1
+	fi
+	if [ $tests_passed -ge 1 ]; then
+		echo "Running Python version of cmp-tree $num_calls times..."
+		printf "" > ../../speed-test.python.out
+		start=$(date +%s.%N)
 
-	for i in $(seq $num_calls); do
-		python cmp-tree.py ${first_dir} ${second_dir} 1>&2
-	done
+		for i in $(seq $num_calls); do
+			python cmp-tree.py ${first_dir} ${second_dir} >> ../../speed-test.python.out
+		done
 
-	end=$(date +%s.%N)
-	total_execution_time=$(echo "$end - $start" | bc -l)
-	average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
+		end=$(date +%s.%N)
+		total_execution_time=$(echo "$end - $start" | bc -l)
+		average_execution_time=$(echo "($end - $start) / $num_calls" | bc -l)
 
-	echo "cmp-tree (Python): $num_calls calls took a total of ${total_execution_time}s"
-	echo "cmp-tree (Python): On average, each execution took ${average_execution_time}s"
+		echo "cmp-tree (Python): $num_calls calls took a total of ${total_execution_time}s"
+		echo "cmp-tree (Python): On average, each execution took ${average_execution_time}s"
+	else
+		echo "ERROR: Python version of cmp-tree either does not exist or is not working correctly. Skipping..."
+	fi
+
 	cd ../..
 	# }}}
 }
@@ -112,7 +194,7 @@ diff_tests() {
 	start=$(date +%s.%N)
 
 	for i in $(seq $num_calls); do
-		diff -qr ${first_dir} ${second_dir} 1>&2
+		diff -qr ${first_dir} ${second_dir} &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -136,7 +218,7 @@ rsync_tests() {
 		# there are any differences in the two directory trees. Second, you
 		# must end the path to the directories that root each directory tree
 		# with a "/".
-		rsync -nrvc --delete kingston1/ kingston2/ 1>&2
+		rsync -nrvc --delete kingston1/ kingston2/ &> /dev/null
 	done
 
 	end=$(date +%s.%N)
@@ -154,5 +236,5 @@ cpp_tests
 c_tests
 rust_tests
 python_tests
-diff_tests
-rsync_tests
+# diff_tests
+# rsync_tests
