@@ -698,7 +698,7 @@ DynamicArray *compare_directory_trees(String *first_root, \
  * \param `*config` a `Config` representing a configuration for executing
  *     `cmp-tree`, usually modified through command line arguments to the
  *     program.
- * \param `*directory_tree_comparison` a DynamicArray<FullFileComparison>`.
+ * \param `*directory_tree_comparison` a `DynamicArray<FullFileComparison>`.
  *     Typically, this parameter is the result of a call to
  *     `compare_directory_trees()`.
  */
