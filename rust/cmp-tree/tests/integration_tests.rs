@@ -122,4 +122,19 @@ mod integration_tests {
         // TODO: this should also check more detailed output. How many files differed? Which files
         // differed? How did they differ?
     }
+
+    #[test]
+    fn it011_2_level_trees_differing_modification_times() {
+        let mut conf = cmp_tree::default_config();
+        // By default, `cmp-tree` does not check that file metadata is identical as well.
+        // Enable metadata comparison.
+        conf.compare_metadata = true;
+        let first_dir = Path::new("../../tests/011/first");
+        let second_dir = Path::new("../../tests/011/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        // TODO: this should also check more detailed output. How many files differed? Which files
+        // differed? How did they differ?
+    }
 }
