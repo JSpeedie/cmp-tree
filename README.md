@@ -94,12 +94,12 @@ was chosen as the primary implementation.
 This project includes a collection of test inputs (located in `./tests`) that
 are used in the Rust tests but can also be used by the other implementations if
 at some point it is decided to add tests for those. Keep in mind that the
-number of test /inputs/ is not representative of how many /tests/ there are.
+number of test *inputs* is not representative of how many *tests* there are.
 Each test input (and sometimes only parts of each test input) is reused
 multiple times for various tests.
 
 It is also worth explaining why all the tests appear in the repo as `.tar.xz`
-files. This decision to store the test inputs in an archived form was done oo
+files. This decision to store the test inputs in an archived form was done to
 make things easier for developers. Archiving a test input means committing only
 one file per test, rather than possibly dozens of files (for larger directory
 trees) per test.
