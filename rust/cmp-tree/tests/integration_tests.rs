@@ -103,6 +103,18 @@ mod integration_tests {
     }
 
     #[test]
+    fn it_general_008_differing_6l_one_same_size_file_differing_in_content() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/013/first");
+        let second_dir = Path::new("../../tests/013/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
+
+    #[test]
     fn it_soft_links_001_identical_soft_link_that_points_to_identical_directories() {
         /* {{{ */
         let conf = cmp_tree::default_config();
