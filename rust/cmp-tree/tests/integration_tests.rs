@@ -182,4 +182,19 @@ mod integration_tests {
         assert_eq!(exit_code, 1);
         /* }}} */
     }
+
+    #[test]
+    fn it_modification_times_004_nested_directories_with_one_directory_differing_in_mtime() {
+        /* {{{ */
+        let mut conf = cmp_tree::default_config();
+        // By default, `cmp-tree` does not check that the modification times of the files are
+        // identical as well. Enable modification time comparison.
+        conf.compare_modification_times = true;
+        let first_dir = Path::new("../../tests/012/first");
+        let second_dir = Path::new("../../tests/012/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
 }
