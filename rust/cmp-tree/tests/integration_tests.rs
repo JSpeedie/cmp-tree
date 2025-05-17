@@ -142,9 +142,9 @@ mod integration_tests {
     fn it_modification_times_001_two_reg_files_with_identical_mtimes() {
         /* {{{ */
         let mut conf = cmp_tree::default_config();
-        // By default, `cmp-tree` does not check that file metadata is identical as well.
-        // Enable metadata comparison.
-        conf.compare_metadata = true;
+        // By default, `cmp-tree` does not check that the modification times of the files are
+        // identical as well. Enable modification time comparison.
+        conf.compare_modification_times = true;
         let first_dir = Path::new("../../tests/001/first");
         let second_dir = Path::new("../../tests/001/second");
 
@@ -157,9 +157,9 @@ mod integration_tests {
     fn it_modification_times_002_four_reg_files_all_with_differing_mtimes() {
         /* {{{ */
         let mut conf = cmp_tree::default_config();
-        // By default, `cmp-tree` does not check that file metadata is identical as well.
-        // Enable metadata comparison.
-        conf.compare_metadata = true;
+        // By default, `cmp-tree` does not check that the modification times of the files are
+        // identical as well. Enable modification time comparison.
+        conf.compare_modification_times = true;
         let first_dir = Path::new("../../tests/011/first");
         let second_dir = Path::new("../../tests/011/second");
 
