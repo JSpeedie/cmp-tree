@@ -154,7 +154,22 @@ mod integration_tests {
     }
 
     #[test]
-    fn it_modification_times_002_four_reg_files_all_with_differing_mtimes() {
+    fn it_modification_times_002_four_reg_files_with_identical_mtimes() {
+        /* {{{ */
+        let mut conf = cmp_tree::default_config();
+        // By default, `cmp-tree` does not check that the modification times of the files are
+        // identical as well. Enable modification time comparison.
+        conf.compare_modification_times = true;
+        let first_dir = Path::new("../../tests/003/first");
+        let second_dir = Path::new("../../tests/003/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 0);
+        /* }}} */
+    }
+
+    #[test]
+    fn it_modification_times_003_four_reg_files_all_with_differing_mtimes() {
         /* {{{ */
         let mut conf = cmp_tree::default_config();
         // By default, `cmp-tree` does not check that the modification times of the files are
