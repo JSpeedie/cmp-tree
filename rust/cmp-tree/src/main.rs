@@ -75,7 +75,7 @@ fn main() {
 
     /* Modify the config as the commandline flags/argument require */
     if match_result.get_flag("matches") { conf.matches = true; }
-    if match_result.get_flag("metadata") { conf.compare_metadata = true; }
+    if match_result.get_flag("date") { conf.compare_modification_times = true; }
     if match_result.get_flag("pretty") { conf.pretty = true; }
     if match_result.get_flag("silent") { conf.silent = true; }
     if match_result.get_flag("totals") { conf.totals = true; }

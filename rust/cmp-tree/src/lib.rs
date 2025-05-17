@@ -25,8 +25,6 @@ enum FileCmp {
     /* For when the two soft links mismatch in their link path */
     SubstanceSoftLinkLinkMismatch,
     /* (4) For Metadata Comparisons */
-    MetadataAccessTimeMismatch,
-    MetadataCreationTimeMismatch,
     MetadataModificationTimeMismatch,
     /* (5) For complete matches */
     /* For when the two files (understood in the broad sense) match don't mismatch in any of the
@@ -106,7 +104,7 @@ struct FullFileComparison {
 * within `cmp-tree` will require a Config struct and the values of said struct will affect how
 * they work or run. */
 pub struct Config {
-    pub compare_metadata: bool,
+    pub compare_modification_times: bool,
     pub matches: bool,
     pub pretty: bool,
     pub silent: bool,
@@ -152,7 +150,7 @@ const WHITE: &str = "\x1B[37m";
 pub fn default_config() -> Config {
     /* {{{ */
     return Config {
-        compare_metadata: false,
+        compare_modification_times: false,
         matches: false,
         pretty: false,
         silent: false,
@@ -515,43 +513,18 @@ fn compare_files_compare_substance(first_path: &Path, representative_filetype: S
 
 /// A helper function for `compare_files()`. Takes two paths that point to two files of the same
 /// file type and returns a `Result` that either contains a `FileCmp` that represents how the two
-/// files (understood in the broad sense) compare in terms of their metadata or an `Err`
+/// files (understood in the broad sense) compare in terms of their modification time or an `Err`
 /// indicating that an error occurred in the process of comparing the two files.
 ///
 /// #### Parameters:
 /// * `first_metadata` the file metadata of the first file we wish to compare.
 /// * `second_metadata` the file metadata of the second file we wish to compare.
 /// #### Return:
-/// * a `FileCmp` that represents whether the two files are equivalent in terms of metadata and
-///     how they are different in this regard if they are.
-fn compare_files_compare_metadata(first_metadata: &Metadata, second_metadata: &Metadata) ->
+/// * a `FileCmp` that represents whether the two files are equivalent in terms of their
+///     modification time.
+fn compare_files_compare_modification_time(first_metadata: &Metadata, second_metadata: &Metadata) ->
     Result<FileCmp, ()> {
     /* {{{ */
-    match first_metadata.accessed() {
-        Ok(first_acc_time) => match second_metadata.accessed() {
-            Ok(second_acc_time) => {
-                match first_acc_time == second_acc_time {
-                    true => (),
-                    false => return Ok(FileCmp::MetadataAccessTimeMismatch),
-                }
-            },
-            Err(_) => return Err(()),
-        },
-        Err(_) => return Err(()),
-    };
-
-    match first_metadata.created() {
-        Ok(first_create_time) => match second_metadata.created() {
-            Ok(second_create_time) => {
-                match first_create_time == second_create_time {
-                    true => (),
-                    false => return Ok(FileCmp::MetadataCreationTimeMismatch),
-                }
-            },
-            Err(_) => return Err(()),
-        },
-        Err(_) => return Err(()),
-    };
 
     match first_metadata.modified() {
         Ok(first_mod_time) => match second_metadata.modified() {
@@ -692,8 +665,8 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
 
     /* 3. Compare the metadata of both files. */
     /* Comparing metadata is optional, and by default is not enabled */
-    if config.compare_metadata {
-        match compare_files_compare_metadata(&first_metadata, &second_metadata) {
+    if config.compare_modification_times {
+        match compare_files_compare_modification_time(&first_metadata, &second_metadata) {
             Ok(metadata_cmp) => {
                 ret_partial_cmp.file_cmp = metadata_cmp;
                 /* If the two files did not have identical metadata, return early */
@@ -923,7 +896,8 @@ fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
         },
         FileCmp::ExistenceOnlyFirstFile => {
             if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path, full_comp.second_path);
+            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path,
+                full_comp.second_path);
             if config.pretty { print!("{NORMAL}"); }
         },
         FileCmp::ExistenceOnlySecondFile => {
@@ -938,15 +912,21 @@ fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
                 full_comp.second_path);
             if config.pretty { print!("{NORMAL}"); }
         },
-        FileCmp::SubstanceRegFileContentMismatch | FileCmp::SubstanceSoftLinkLinkMismatch => {
+        FileCmp::SubstanceRegFileContentMismatch => {
             if config.pretty { print!("{BOLD}{RED}"); }
             println!("{:?} differs from {:?}", full_comp.first_path, full_comp.second_path);
             if config.pretty { print!("{NORMAL}"); }
         },
-        FileCmp::MetadataAccessTimeMismatch | FileCmp::MetadataCreationTimeMismatch |
-            FileCmp::MetadataModificationTimeMismatch => {
+        FileCmp::SubstanceSoftLinkLinkMismatch => {
             if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} has different metadata to {:?}", full_comp.first_path, full_comp.second_path);
+            println!("{:?} has a different link path than {:?}", full_comp.first_path,
+                full_comp.second_path);
+            if config.pretty { print!("{NORMAL}"); }
+        },
+        FileCmp::MetadataModificationTimeMismatch => {
+            if config.pretty { print!("{BOLD}{RED}"); }
+            println!("{:?} has different modification time to {:?}", full_comp.first_path,
+                full_comp.second_path);
             if config.pretty { print!("{NORMAL}"); }
         },
         FileCmp::Match => {
