@@ -127,6 +127,42 @@ mod integration_tests {
     }
 
     #[test]
+    fn it_substance_002_differing_1l_first_byte_differs_two_regular_files() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/018/first");
+        let second_dir = Path::new("../../tests/018/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
+
+    #[test]
+    fn it_substance_003_differing_1l_byte_in_middle_of_file_differs_two_regular_files() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/019/first");
+        let second_dir = Path::new("../../tests/019/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
+
+    #[test]
+    fn it_substance_004_differing_1l_final_byte_differs_two_regular_files() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/020/first");
+        let second_dir = Path::new("../../tests/020/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
+
+    #[test]
     fn it_file_types_001_directory_vs_regular_file() {
         /* {{{ */
         let conf = cmp_tree::default_config();
