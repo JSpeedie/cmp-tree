@@ -5,8 +5,8 @@ set -e
 
 build_first () {
 	cur_wd=$(pwd)
-	mkdir -p first/
-	cd first/
+	mkdir -p "first/"
+	cd "first/"
 
 	# Write a file of 50,000 bytes pulled from /dev/urandom
 	dd if="/dev/urandom" bs=1 count=50000 of="random_file" status=none
@@ -21,10 +21,10 @@ build_second () {
 	cur_wd=$(pwd)
 	# Copy all the contents of the first/ to second/, preserving file
 	# metadata...
-	cp -arT first/ second/
+	cp -arT "first/" "second/"
 
 	# But then change one byte in `random_file` so that it differs
-	cd second/
+	cd "second/"
 	# Change the first byte to be 'b'
 	printf "b" | dd bs=1 count=1 seek=0 of="random_file" conv=notrunc status=none
 
