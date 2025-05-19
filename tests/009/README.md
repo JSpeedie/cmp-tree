@@ -41,6 +41,5 @@ does the following:
 Ran from `tests/009`:
 
 * `cmp-tree first/ second/` should exit with an exit code of 1.
-* `cmp-tree -d first/ second/` should exit with an exit code of 1.
 * `diff -qr first/ second/` should exit with an exit code of 1.
 * `diff -qr --no-dereference first/ second/` should exit with an exit code of 1.
