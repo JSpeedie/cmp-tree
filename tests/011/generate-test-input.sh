@@ -19,15 +19,14 @@ build_first () {
 	cur_wd=$(pwd)
 	mkdir -p "first/"
 	cd "first/"
-	first_wd=$(pwd)
 
-	man cmp > cmp_man_pages.txt
-	write_lorem_to_file Lorem.txt
+	man cmp > "cmp_man_pages.txt"
+	write_lorem_to_file "Lorem.txt"
 
 	mkdir -p "subdir/"
 	cd "subdir/"
-	magick -size 256x256 gradient: linear_gradient.png
-	magick rose: rose.png
+	magick -size 256x256 gradient: "linear_gradient.png"
+	magick rose: "rose.png"
 
 	# Return to the working directory where this function started
 	cd "$cur_wd"
@@ -36,14 +35,14 @@ build_first () {
 build_second () {
 	# Copy all the contents of the first/ to second/, preserving file
 	# metadata...
-	cp -arT first/ second/
+	cp -arT "first/" "second/"
 
 	# ... but then overwrite the file metadata of all the regular files
 	# in second/ to have their access and modification times set to 1 day earlier
 	# than their current modification time
-	for cur_file in $(find second/ -type f | sort); do
-		cur_mod_time=$(stat -c%y ${cur_file})
-		touch -d "${cur_mod_time} - 1 day" ${cur_file}
+	for cur_file in $(find "second/" -type f | sort); do
+		cur_mod_time=$(stat -c%y "${cur_file}")
+		touch -d "${cur_mod_time} - 1 day" "${cur_file}"
 	done
 }
 
