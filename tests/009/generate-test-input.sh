@@ -51,7 +51,7 @@ build_first () {
 	mkdir -p "first/"
 	cd "first/"
 
-	ln -T -sf "../adirectory/" "link"
+	ln -Tfs "../adirectory/" "link"
 
 	# Return to the working directory where this function started
 	cd "$cur_wd"
@@ -62,7 +62,7 @@ build_second () {
 	mkdir -p "second/"
 	cd "second/"
 
-	ln -T -sf "../anotherdirectory/" "link"
+	ln -Tfs "../anotherdirectory/" "link"
 
 	# Return to the working directory where this function started
 	cd "$cur_wd"
