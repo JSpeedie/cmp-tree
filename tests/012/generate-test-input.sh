@@ -33,7 +33,8 @@ build_second () {
 	# metadata...
 	cp -arT first/ second/
 
-	# But then overwrite one of the files to be different
+	# ... but then overwrite the file metadata of one specific file to be
+	# different
 	touch -m -d "$(stat -c%y 'second/c/i/1/a') + 1 hour" 'second/c/i/1/a'
 }
 
