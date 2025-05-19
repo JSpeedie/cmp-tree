@@ -40,7 +40,7 @@ The aim of this test is to serve as one of many tests that make sure
 
 Ran from `tests/008`:
 
-* `cmp-tree` should exit with an exit code of 0.
+* `cmp-tree first/ second/` should exit with an exit code of 0.
 * `cmp-tree -d first/ second/` should exit with an exit code of 1.
-* `diff -qr` should exit with an exit code of 0.
-* `diff -qr --no-dereference` should exit with an exit code of 0.
+* `diff -qr first/ second/` should exit with an exit code of 0.
+* `diff -qr --no-dereference first/ second/` should exit with an exit code of 0.
