@@ -40,7 +40,7 @@ does the following:
 
 Ran from `tests/009`:
 
-* `cmp-tree` should exit with an exit code of 1.
+* `cmp-tree first/ second/` should exit with an exit code of 1.
 * `cmp-tree -d first/ second/` should exit with an exit code of 1.
-* `diff -qr` should exit with an exit code of 1.
-* `diff -qr --no-dereference` should exit with an exit code of 1.
+* `diff -qr first/ second/` should exit with an exit code of 1.
+* `diff -qr --no-dereference first/ second/` should exit with an exit code of 1.
