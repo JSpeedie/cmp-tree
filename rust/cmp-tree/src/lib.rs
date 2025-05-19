@@ -403,18 +403,34 @@ fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, 
 ///     how they are different in this regard if they are.
 fn compare_files_compare_existences(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
+    let first_existence: bool;
+    let second_existence: bool;
 
-    /* If neither path points to files that exist, return that neither exists */
-    if !first_path.exists() && !second_path.exists() {
-        return Ok(FileCmp::ExistenceNeitherFile);
-    /* If only one of the file paths points to an existing file, note which file exists */
-    } else if first_path.exists() && !second_path.exists() {
-        return Ok(FileCmp::ExistenceOnlyFirstFile);
-    } else if !first_path.exists() && second_path.exists() {
-        return Ok(FileCmp::ExistenceOnlySecondFile);
+    /* Checking existences is a little bit trickier with symlinks. First, we need to check if our
+     * paths point to symlinks and the link itself exists (rather than whether the stuff it points
+     * to exists) */
+    if first_path.is_symlink() {
+        first_existence = true;
+    } else {
+        first_existence = first_path.exists();
+    }
+    if second_path.is_symlink() {
+        second_existence = true;
+    } else {
+        second_existence = second_path.exists();
     }
 
-    return Ok(FileCmp::Match);
+    if first_existence && second_existence {
+        return Ok(FileCmp::Match);
+    /* If only one of the file paths points to an existing file, note which file exists */
+    } else if first_existence && !second_existence {
+        return Ok(FileCmp::ExistenceOnlyFirstFile);
+    } else if !first_existence && second_existence {
+        return Ok(FileCmp::ExistenceOnlySecondFile);
+    /* !first_existence && !second_existence */
+    } else {
+        return Ok(FileCmp::ExistenceNeitherFile);
+    }
     /* }}} */
 }
 

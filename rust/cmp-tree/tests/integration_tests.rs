@@ -115,6 +115,18 @@ mod integration_tests {
     }
 
     #[test]
+    fn it_substance_001_identical_1l_two_0_byte_regular_files() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/017/first");
+        let second_dir = Path::new("../../tests/017/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 0);
+        /* }}} */
+    }
+
+    #[test]
     fn it_file_types_001_directory_vs_regular_file() {
         /* {{{ */
         let conf = cmp_tree::default_config();
@@ -175,7 +187,7 @@ mod integration_tests {
     }
 
     #[test]
-    fn it_soft_links_004_links_that_point_to_nonexistent_locations() {
+    fn it_soft_links_004_soft_links_that_point_to_nonexistent_locations() {
         /* {{{ */
         let conf = cmp_tree::default_config();
         let first_dir = Path::new("../../tests/014/first");
