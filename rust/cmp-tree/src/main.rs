@@ -15,7 +15,7 @@ fn main() {
             Arg::new("second_root_dir").required(true).index(2)
         )
         .arg(
-            Arg::new("metadata").short('d').long("metadata").num_args(0)
+            Arg::new("date").short('d').long("date").num_args(0)
         )
         .arg(
             Arg::new("matches").short('m').long("matches").num_args(0)
