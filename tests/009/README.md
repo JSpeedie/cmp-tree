@@ -4,11 +4,10 @@ This test input has directory trees with contents that are identical in terms
 of existence, and file-type, but not in substance. The two corresponding soft
 links point to two different directories that differ in their contents.
 
-> Note: `cmp-tree` should evaluate the two soft links as being different
-> because they do not point to the same path, *not* because what they point
-> differs. `diff -qr` evaluates soft links as identical if what they point to
-> is identical, so it will report a difference between the two directory trees
-> like `cmp-tree` would, but for different reasons.
+> Note: by default, `cmp-tree` should evaluate two soft links to be identical
+> if and only if their link paths are identical, regardless of whether or not
+> what they point to is identical or even exists. In this way, `cmp-tree`
+> should (by default) behave the way `diff -qr --no-dereference` would behave.
 
 ```
 adirectory                                  anotherdirectory
@@ -44,3 +43,4 @@ Ran from `tests/009`:
 * `cmp-tree` should exit with an exit code of 1.
 * `cmp-tree -d first/ second/` should exit with an exit code of 1.
 * `diff -qr` should exit with an exit code of 1.
+* `diff -qr --no-dereference` should exit with an exit code of 1.
