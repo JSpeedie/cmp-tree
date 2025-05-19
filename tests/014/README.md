@@ -5,10 +5,10 @@ of existence, file-type, substance, and modification time. Importantly, the two
 corresponding soft links in the two directory trees both point to a
 *non-existent* destination.
 
-> Note: `cmp-tree` should evaluate two soft links to be identical if and only
-> if their link paths are identical, regardless of whether or not what they
-> point to is identical or even exists. In this way, `cmp-tree` should by
-> default behave the way `diff -qr --no-dereference` would behave.
+> Note: by default, `cmp-tree` should evaluate two soft links to be identical
+> if and only if their link paths are identical, regardless of whether or not
+> what they point to is identical or even exists. In this way, `cmp-tree`
+> should (by default) behave the way `diff -qr --no-dereference` would behave.
 
 ```
 first                       second
@@ -35,7 +35,6 @@ The aim of this test is to serve as one of many tests that make sure
 
 Ran from `tests/014`:
 
-* `cmp-tree` should exit with an exit code of 0.
-* `cmp-tree -d first/ second/` should exit with an exit code of 0.
-* `diff -qr` should exit with an exit code of 1.
-* `diff -qr --no-dereference` should exit with an exit code of 0.
+* `cmp-tree first/ second/` should exit with an exit code of 0.
+* `diff -qr first/ second/` should exit with an exit code of 1.
+* `diff -qr --no-dereference first/ second/` should exit with an exit code of 0.
