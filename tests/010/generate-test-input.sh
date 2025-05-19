@@ -7,8 +7,8 @@ write_filler_text_file () {
 	# {{{
 	printf "This is a file with some text.
 
-	It should be identical to the corresponding file in the other directory\
-	tree." > "$1"
+It should be identical to the corresponding file in the other directory \
+tree.\n" > "$1"
 	# }}}
 }
 
@@ -16,6 +16,7 @@ build_adirectory() {
 	cur_wd=$(pwd)
 	mkdir -p "adirectory/"
 	cd "adirectory/"
+
 	mkdir -p "dir/"
 	write_filler_text_file "file.txt"
 	# Return to the working directory where this function started
@@ -33,7 +34,7 @@ build_first () {
 	mkdir -p "first/"
 	cd "first/"
 
-	ln -s "../adirectory/" "link"
+	ln -Tfs "../adirectory/" "link"
 
 	# Return to the working directory where this function started
 	cd "$cur_wd"
@@ -44,7 +45,7 @@ build_second () {
 	mkdir -p "second/"
 	cd "second/"
 
-	ln -s "../anotherdirectory/" "link"
+	ln -Tfs "../anotherdirectory/" "link"
 
 	# Return to the working directory where this function started
 	cd "$cur_wd"
