@@ -52,8 +52,7 @@ build_second () {
 	cd "$cur_wd"
 }
 
-# The body of the script, build the two "helper" directory trees, and then the
-# first input directory tree and the second
+# The body of the script, build the first input directory tree and the second
 build_first
 build_second
 
