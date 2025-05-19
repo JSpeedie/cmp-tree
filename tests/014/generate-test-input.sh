@@ -16,11 +16,10 @@ build_first () {
 
 build_second () {
 	# Copy all the contents of the first/ to second/, preserving file metadata.
-	cp -arT first/ second/
+	cp -arT "first/" "second/"
 }
 
-# The body of the script, build the two "helper" directory trees, and then the
-# first input directory tree and the second
+# The body of the script, build the first input directory tree and the second
 build_first
 build_second
 
