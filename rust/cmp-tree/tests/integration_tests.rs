@@ -151,6 +151,18 @@ mod integration_tests {
     }
 
     #[test]
+    fn it_soft_links_004_links_that_point_to_nonexistent_locations() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/014/first");
+        let second_dir = Path::new("../../tests/014/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 0);
+        /* }}} */
+    }
+
+    #[test]
     fn it_modification_times_001_two_reg_files_with_identical_mtimes() {
         /* {{{ */
         let mut conf = cmp_tree::default_config();
