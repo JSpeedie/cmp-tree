@@ -115,11 +115,23 @@ mod integration_tests {
     }
 
     #[test]
-    fn it_general_009_differing_1l_different_file_types() {
+    fn it_file_types_001_directory_vs_regular_file() {
         /* {{{ */
         let conf = cmp_tree::default_config();
         let first_dir = Path::new("../../tests/015/first");
         let second_dir = Path::new("../../tests/015/second");
+
+        let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
+        assert_eq!(exit_code, 1);
+        /* }}} */
+    }
+
+    #[test]
+    fn it_file_types_002_soft_link_vs_regular_file() {
+        /* {{{ */
+        let conf = cmp_tree::default_config();
+        let first_dir = Path::new("../../tests/016/first");
+        let second_dir = Path::new("../../tests/016/second");
 
         let exit_code = cmp_tree::cmp_tree(&conf, &first_dir, &second_dir);
         assert_eq!(exit_code, 1);
