@@ -7,7 +7,7 @@ mod unit_tests {
         /* {{{ */
         let root_dir = Path::new("../../tests/001/first");
         let mut expected_ret = Vec::from([
-            Path::new("Lorem.md"),
+            Path::new("Lorem.txt"),
             Path::new("cmp_man_pages.txt"),
         ]);
         expected_ret.sort();
@@ -23,7 +23,7 @@ mod unit_tests {
         /* {{{ */
         let root_dir = Path::new("../../tests/003/second");
         let mut expected_ret = Vec::from([
-            Path::new("Lorem.md"),
+            Path::new("Lorem.txt"),
             Path::new("cmp_man_pages.txt"),
             Path::new("subdir"),
             Path::new("subdir/linear_gradient.png"),
@@ -105,8 +105,8 @@ mod unit_tests {
     #[test]
     fn ut_compare_regular_files_001() {
         /* {{{ */
-        let first_file = Path::new("../../tests/001/first/Lorem.md");
-        let second_file = Path::new("../../tests/001/second/Lorem.md");
+        let first_file = Path::new("../../tests/001/first/Lorem.txt");
+        let second_file = Path::new("../../tests/001/second/Lorem.txt");
         /* `expected_ret` would be `Ok(FileCmp::Match)` */
         let expected_ret_content = FileCmp::Match;
 
@@ -144,8 +144,8 @@ mod unit_tests {
         /* The two input files are text files with the same words, but every letter (but the very
          * first) in the first file is in lower case whereas every letter in the second file is
          * uppercase. */
-        let first_file = Path::new("../../tests/002/first/Lorem.md");
-        let second_file = Path::new("../../tests/002/second/Lorem.md");
+        let first_file = Path::new("../../tests/002/first/Lorem.txt");
+        let second_file = Path::new("../../tests/002/second/Lorem.txt");
         /* `expected_ret` would be `Ok(FileCmp::SubstanceRegFileContentMismatch)` */
         let expected_ret_content = FileCmp::SubstanceRegFileContentMismatch;
 
@@ -200,8 +200,8 @@ mod unit_tests {
                     first_ft: Some(SimpleFileType::RegFile),
                     second_ft: Some(SimpleFileType::RegFile),
                 },
-                first_path: PathBuf::from(first_dir.join("Lorem.md")),
-                second_path: PathBuf::from(second_dir.join("Lorem.md")),
+                first_path: PathBuf::from(first_dir.join("Lorem.txt")),
+                second_path: PathBuf::from(second_dir.join("Lorem.txt")),
             },
         ]);
         expected_ret_content.sort();
@@ -239,8 +239,8 @@ mod unit_tests {
                     first_ft: Some(SimpleFileType::RegFile),
                     second_ft: Some(SimpleFileType::RegFile),
                 },
-                first_path: PathBuf::from(first_dir.join("Lorem.md")),
-                second_path: PathBuf::from(second_dir.join("Lorem.md")),
+                first_path: PathBuf::from(first_dir.join("Lorem.txt")),
+                second_path: PathBuf::from(second_dir.join("Lorem.txt")),
             },
         ]);
         expected_ret_content.sort();
@@ -278,8 +278,8 @@ mod unit_tests {
                     first_ft: Some(SimpleFileType::RegFile),
                     second_ft: Some(SimpleFileType::RegFile),
                 },
-                first_path: PathBuf::from(first_dir.join("Lorem.md")),
-                second_path: PathBuf::from(second_dir.join("Lorem.md")),
+                first_path: PathBuf::from(first_dir.join("Lorem.txt")),
+                second_path: PathBuf::from(second_dir.join("Lorem.txt")),
             },
             FullFileComparison {
                 partial_cmp: PartialFileComparison {
@@ -344,8 +344,8 @@ mod unit_tests {
                     first_ft: Some(SimpleFileType::RegFile),
                     second_ft: Some(SimpleFileType::RegFile),
                 },
-                first_path: PathBuf::from(first_dir.join("Lorem.md")),
-                second_path: PathBuf::from(second_dir.join("Lorem.md")),
+                first_path: PathBuf::from(first_dir.join("Lorem.txt")),
+                second_path: PathBuf::from(second_dir.join("Lorem.txt")),
             },
             FullFileComparison {
                 partial_cmp: PartialFileComparison {
@@ -410,8 +410,8 @@ mod unit_tests {
                     first_ft: Some(SimpleFileType::RegFile),
                     second_ft: Some(SimpleFileType::RegFile),
                 },
-                first_path: PathBuf::from(first_dir.join("Lorem.md")),
-                second_path: PathBuf::from(second_dir.join("Lorem.md")),
+                first_path: PathBuf::from(first_dir.join("Lorem.txt")),
+                second_path: PathBuf::from(second_dir.join("Lorem.txt")),
             },
             FullFileComparison {
                 partial_cmp: PartialFileComparison {
