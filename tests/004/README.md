@@ -5,12 +5,12 @@ This test input has directory trees with contents that are largely identical
 with the exception of `[...]/Lorem.txt` which differs in substance.
 
 ```
-first                                                  second
-├── cmp_man_pages.txt                                  ├── cmp_man_pages.txt
-├── Lorem.txt                                          ├── Lorem.txt
-└── subdir                                             └── subdir
-    ├── linear_gradient.png                                ├── linear_gradient.png
-    └── rose.png                                           └── rose.png
+first                                                      second
+├── cmp_man_pages.txt                                      ├── cmp_man_pages.txt
+├── Lorem.txt                                              ├── Lorem.txt
+└── subdir                                                 └── subdir
+    ├── linear_gradient.png                                    ├── linear_gradient.png
+    └── rose.png             <-- differs in substance -->      └── rose.png
 ```
 
 ## Generating the Test Input
