@@ -1,6 +1,6 @@
 /* A struct used to define the configuration `cmp-tree` functions will run under. Many functions
-* within `cmp-tree` will require a Config struct and the values of said struct will affect how
-* they work or run. */
+ * within `cmp-tree` will require a Config struct and the values of said struct will affect how
+ * they work or run. */
 pub struct Config {
     pub compare_modification_times: bool,
     pub matches: bool,
