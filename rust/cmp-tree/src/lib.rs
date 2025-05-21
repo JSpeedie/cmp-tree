@@ -1,203 +1,29 @@
-use std::cmp::Ordering;
-use std::fs::{File,FileType,Metadata,read_link};
+use std::fs::{File,Metadata,read_link};
 use std::io::Read; // For getting the SHA256 hash of a file
 use std::path::{Path, PathBuf};
 use std::thread::{available_parallelism,scope,ScopedJoinHandle};
 
+// Declare `src/config.rs` as a module
+pub mod config;
+// Re-export `Config` and `default_config()`
+// Use statements to get rid of the `config::` prefix
+pub use config::Config;
+pub use config::default_config;
 
-#[derive(Debug,PartialEq,Eq,PartialOrd,Ord)]
-enum FileCmp {
-    /* (1) For Existence Comparisons */
-    /* For when neither of the two files (understood in the broad sense) exist. */
-    ExistenceNeitherFile,
-    /* For when only the first of the two files (understood in the broad sense) exists. */
-    ExistenceOnlyFirstFile,
-    /* For when only the second of the two files (understood in the broad sense) exists. */
-    ExistenceOnlySecondFile,
-    /* (2) For File Type Comparisons */
-    /* For when the two files (understood in the broad sense) mismatch in their type (e.g. one is a
-    * directory, one is a regular file). */
-    FileTypeTypeMismatch,
-    /* (3) For Substance Comparisons */
-    /* For when the two files mismatch in their content (i.e. they are not byte-for-byte
-    * identical). */
-    SubstanceRegFileContentMismatch,
-    /* For when the two soft links mismatch in their link path */
-    SubstanceSoftLinkLinkMismatch,
-    /* (4) For Metadata Comparisons */
-    MetadataModificationTimeMismatch,
-    /* (5) For complete matches */
-    /* For when the two files (understood in the broad sense) match don't mismatch in any of the
-    * possible ways represented above */
-    Match,
-}
+// Declare `src/data_structures.rs` as a module
+pub mod data_structures;
+// Use statements to get rid of the `data_structures::` prefix
+use data_structures::FileCmp;
+use data_structures::SimpleFileType;
+use data_structures::PartialFileComparison;
+use data_structures::FullFileComparison;
 
+// Declare `src/totals.rs` as a module
+pub mod totals;
+use totals::Totals;
 
-#[derive(Debug,PartialEq,Eq,Clone,PartialOrd,Ord)]
-enum SimpleFileType {
-    RegFile,
-    Directory,
-    SoftLink,
-}
-
-
-#[derive(Debug,PartialEq,Eq,PartialOrd)]
-struct PartialFileComparison {
-    file_cmp: FileCmp,
-    first_ft: Option<SimpleFileType>,
-    second_ft: Option<SimpleFileType>,
-}
-
-
-impl Ord for PartialFileComparison {
-    /* {{{ */
-    fn cmp(&self, other: &Self) -> Ordering {
-        /* Compare the `file_cmp` member. If that comparison returns a `Less` or `Greater`
-         * Ordering, our work is done, otherwise proceed to compare the next member */
-        match (&(self.file_cmp)).cmp(&(other.file_cmp)) {
-            Ordering::Less => return Ordering::Less,
-            Ordering::Greater => return Ordering::Greater,
-            Ordering::Equal => {
-                /* Provide a closure for calculating the "value" of a given
-                 * `Option<SimpleFileType>` */
-                let calculate_ft_value = |input: &Option<SimpleFileType>| {
-                    match &input {
-                        None => return 0,
-                        Some(ft) => match ft {
-                            SimpleFileType::RegFile => return 1,
-                            SimpleFileType::Directory => return 2,
-                            SimpleFileType::SoftLink => return 3,
-                        }
-                    }
-                };
-
-                /* Compare the `first_ft` member. If that comparison returns a `Less` or `Greater`
-                 * Ordering, our work is done, otherwise proceed to compare the next member */
-                match calculate_ft_value(&(self.first_ft))
-                    .cmp(&calculate_ft_value(&(other.first_ft))) {
-
-                    Ordering::Less => return Ordering::Less,
-                    Ordering::Greater => return Ordering::Greater,
-                    Ordering::Equal => {
-                        /* Compare the `second_ft` member. Since this is the last member to compare,
-                         * return whatever it evaluates to. */
-                        return calculate_ft_value(&(self.second_ft))
-                            .cmp(&calculate_ft_value(&(other.second_ft)));
-                    }
-                }
-            }
-        }
-    }
-    /* }}} */
-}
-
-
-#[derive(Debug,PartialEq,Eq,PartialOrd,Ord)]
-struct FullFileComparison {
-    partial_cmp: PartialFileComparison,
-    first_path: PathBuf,
-    second_path: PathBuf,
-}
-
-
-/* A struct used to define the configuration `cmp-tree` functions will run under. Many functions
-* within `cmp-tree` will require a Config struct and the values of said struct will affect how
-* they work or run. */
-pub struct Config {
-    pub compare_modification_times: bool,
-    pub matches: bool,
-    pub pretty: bool,
-    pub silent: bool,
-    pub totals: bool,
-}
-
-
-/* A struct used to keep count of the max number and the found number of files, directories, and
-* soft links in a given directory tree comparison */
-struct Totals {
-    max_file_matches: u128,
-    max_dir_matches: u128,
-    max_softlink_matches: u128,
-    file_matches: u128,
-    dir_matches: u128,
-    softlink_matches: u128,
-}
-
-
-/* For printing coloured output */
-#[allow(dead_code)]
-const NOTHING: &str = "";
-const BOLD: &str = "\x1B[1m";
-const NORMAL: &str = "\x1B[0m";
-const RED: &str = "\x1B[31m";
-const GREEN: &str = "\x1B[32m";
-#[allow(dead_code)]
-const YELLOW: &str = "\x1B[33m";
-#[allow(dead_code)]
-const BLUE: &str = "\x1B[34m";
-#[allow(dead_code)]
-const MAGENTA: &str = "\x1B[35m";
-#[allow(dead_code)]
-const CYAN: &str = "\x1B[36m";
-#[allow(dead_code)]
-const WHITE: &str = "\x1B[37m";
-
-
-/// Returns the default config for `cmp-tree`.
-///
-/// #### Return:
-/// * a `Config` struct with all its values set to the default values for `cmp-tree`.
-pub fn default_config() -> Config {
-    /* {{{ */
-    return Config {
-        compare_modification_times: false,
-        matches: false,
-        pretty: false,
-        silent: false,
-        totals: false,
-    };
-    /* }}} */
-}
-
-
-/// Returns a freshly initialized Totals struct.
-///
-/// #### Return:
-/// * a `Totals` struct with all its values set to suitable defaults.
-fn default_totals() -> Totals {
-    /* {{{ */
-    return Totals {
-        max_file_matches: 0,
-        max_dir_matches: 0,
-        max_softlink_matches: 0,
-        file_matches: 0,
-        dir_matches: 0,
-        softlink_matches: 0,
-    };
-    /* }}} */
-}
-
-
-/// Takes a `std::fs::FileType` and maps it to a `SimpleFileType` if possible.
-///
-/// #### Parameters:
-/// * `fs_filetype` the `std::fs::FileType` we wish to map to a `SimpleFileType`.
-/// #### Return:
-/// * a `SimpleFileType` representing one of the file types this library supports on success, and
-///     on error, a unit type (`()`).
-fn fs_filetype_to_simplefiletype(fs_filetype: &FileType) -> Result<SimpleFileType, ()> {
-    /* {{{ */
-    if fs_filetype.is_file() {
-        return Ok(SimpleFileType::RegFile);
-    } else if fs_filetype.is_dir() {
-        return Ok(SimpleFileType::Directory);
-    } else if fs_filetype.is_symlink() {
-        return Ok(SimpleFileType::SoftLink);
-    } else {
-        return Err(());
-    }
-    /* }}} */
-}
+// Declare `src/printing.rs` as a module
+pub mod printing;
 
 
 /// Intended as a helper function for `files_in_tree()`. Returns an unsorted vector list of
@@ -611,7 +437,7 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
          * the existence comparison resulted in a mismatch), save the file type of the existing
          * file and return early */
         Ok((Some(first_meta), None)) => {
-            match fs_filetype_to_simplefiletype(&first_meta.file_type()) {
+            match SimpleFileType::try_from(&first_meta.file_type()) {
                 Ok(ft) => ret_partial_cmp.first_ft = Some(ft),
                 /* If we weren't able to get a `SimpleFileType` for the first file, return early
                  * with an error */
@@ -623,7 +449,7 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
         /* Same as previous comment */
         Ok((None, Some(second_meta))) => {
             ret_partial_cmp.first_ft = None;
-            match fs_filetype_to_simplefiletype(&second_meta.file_type()) {
+            match SimpleFileType::try_from(&second_meta.file_type()) {
                 Ok(ft) => ret_partial_cmp.second_ft = Some(ft),
                 /* If we weren't able to get a `SimpleFileType` for the second file, return early
                  * with an error */
@@ -645,12 +471,12 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
     let second_filetype = second_metadata.file_type();
     /* Update the file types in our return struct now that we have them */
     ret_partial_cmp.first_ft =
-        match fs_filetype_to_simplefiletype(&first_filetype) {
+        match SimpleFileType::try_from(&first_filetype) {
             Ok(ft) => Some(ft),
             Err(_) => None,
         };
     ret_partial_cmp.second_ft =
-        match fs_filetype_to_simplefiletype(&second_filetype) {
+        match SimpleFileType::try_from(&second_filetype) {
             Ok(ft) => Some(ft),
             Err(_) => None,
         };
@@ -802,238 +628,34 @@ fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Pat
 }
 
 
-/// Takes a `Totals` struct `totals_count` and increments the relevant members inside it based on
-/// the result of a file comparison represented by `p_cmp`.
+
+
+/// Takes a `Vec` of `FullFileComparison`s representing a directory tree comparison and returns a a
+/// boolean representing whether or not the file comparison list received as input contains any
+/// mismatches or not.
 ///
 /// #### Parameters:
-/// * `totals_count` a `Totals` representing running totals for a given directory tree comparison.
-/// * `p_cmp` a `PartialFileComparison` containing only the necessary the information about the 2
-///     files that were compared.
-/// TODO: simplify this function or break it up. 99 lines is too long.
-fn update_totals(totals_count: &mut Totals, p_cmp: &PartialFileComparison) {
-    /* {{{ */
-
-    /* First we determine how the given `PartialFileComparison` should affect the max file,
-     * directory, etc. match counts in the `Totals` struct */
-    match &p_cmp.first_ft {
-        Some(f_ft) => match f_ft {
-            SimpleFileType::Directory => totals_count.max_dir_matches += 1,
-            _ => {
-                match &p_cmp.second_ft {
-                    Some(s_ft) => match s_ft {
-                        SimpleFileType::Directory => totals_count.max_dir_matches += 1,
-                        _ => (),
-                    },
-                    None => (),
-                }
-            }
-        },
-        None => match &p_cmp.second_ft {
-            Some(s_ft) => match s_ft {
-                SimpleFileType::Directory => totals_count.max_dir_matches += 1,
-                _ => (),
-            },
-            None => (),
-        },
-    }
-    match &p_cmp.first_ft {
-        Some(f_ft) => match f_ft {
-            SimpleFileType::RegFile => totals_count.max_file_matches += 1,
-            _ => match &p_cmp.second_ft {
-                Some(s_ft) => match s_ft {
-                    SimpleFileType::RegFile => totals_count.max_file_matches += 1,
-                    _ => (),
-                },
-                None => (),
-            }
-        },
-        None => {
-            match &p_cmp.second_ft {
-                Some(s_ft) => match s_ft {
-                    SimpleFileType::RegFile => totals_count.max_file_matches += 1,
-                    _ => (),
-                },
-                None => (),
-            }
-        },
-    }
-    match &p_cmp.first_ft {
-        Some(f_ft) => match f_ft {
-            SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
-            _ => match &p_cmp.second_ft {
-                Some(s_ft) => match s_ft {
-                    SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
-                    _ => (),
-                },
-                None => (),
-            }
-        },
-        None => {
-            match &p_cmp.second_ft {
-                Some(s_ft) => match s_ft {
-                    SimpleFileType::SoftLink => totals_count.max_softlink_matches += 1,
-                    _ => (),
-                },
-                None => (),
-            }
-        },
-    }
-
-    /* Second, we determine how the given `PartialFileComparison` should affect the actual file,
-     * directory, etc. match counts in the `Totals` struct */
-    match &p_cmp.file_cmp {
-        FileCmp::Match => match p_cmp.first_ft.clone().unwrap() {
-            SimpleFileType::RegFile => totals_count.file_matches += 1,
-            SimpleFileType::Directory => totals_count.dir_matches += 1,
-            SimpleFileType::SoftLink => totals_count.softlink_matches += 1,
-        },
-        /* If the file comparison is anything but a match, do nothing to the totals */
-        _ => (),
-    }
-    /* }}} */
-}
-
-
-/// Takes a `FullFileComparison` and prints out the necessary information about it. What
-/// information is printed will depend on the values of `config`.
-///
-/// #### Parameters:
-/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
-///     through command line arguments to the program.
-/// * `full_comp` a `FullFileComparison` containing all the information about the 2 files that
-///     were compared.
-fn print_one_comparison(config: &Config, full_comp: &FullFileComparison) {
-    /* {{{ */
-    match full_comp.partial_cmp.file_cmp {
-        FileCmp::ExistenceNeitherFile => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("Neither {:?} nor {:?} exist", full_comp.first_path, full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::ExistenceOnlyFirstFile => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} exists, but {:?} does NOT exist", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::ExistenceOnlySecondFile => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} does NOT exist, but {:?} does exist", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::FileTypeTypeMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} is not of the same type as {:?}", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::SubstanceRegFileContentMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} differs from {:?}", full_comp.first_path, full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::SubstanceSoftLinkLinkMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} has a different link path than {:?}", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::MetadataModificationTimeMismatch => {
-            if config.pretty { print!("{BOLD}{RED}"); }
-            println!("{:?} has different modification time to {:?}", full_comp.first_path,
-                full_comp.second_path);
-            if config.pretty { print!("{NORMAL}"); }
-        },
-        FileCmp::Match => {
-            if config.matches {
-                if config.pretty { print!("{BOLD}{GREEN}"); }
-                println!("{:?} == {:?}", full_comp.first_path, full_comp.second_path);
-                if config.pretty { print!("{NORMAL}"); }
-            }
-        },
-    }
-    /* }}} */
-}
-
-
-/// Takes a `Result` possibly containing a `Vec` of `FullFileComparison`s and prints out the
-/// necessary information about the list of file comparisons if the `directory_tree_comparison`
-/// is not an `Err`. What information is printed will depend on the values of `config`.
-///
-/// #### Parameters:
-/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
-///     through command line arguments to the program.
-/// * `directory_tree_comparison` a `Result` possibly containing a `Vec` of `FullFileComparison`s.
-///     Typically, this parameter is the result of a call to `compare_directory_trees()`.
-fn print_output(config: &Config, directory_tree_comparison: Result<Vec<FullFileComparison>, ()>) {
-    /* {{{ */
-    let mut totals_count = default_totals();
-
-    match directory_tree_comparison {
-        Ok(list) => {
-            for e in list {
-                /* If we are going to print totals, update our totals count struct */
-                if config.totals { update_totals(&mut totals_count, &e.partial_cmp); }
-
-                /* Print what needs to be printed for the current comparison. This function call
-                * may very well print nothing */
-                print_one_comparison(&config, &e);
-            }
-        },
-        Err(_) => {
-            println!("ERROR: Failed to get the list of comparisons between the two directory trees.");
-            return;
-        }
-    }
-
-    if config.totals {
-        println!("All done!");
-        println!("File byte-for-byte matches: {0}/{1}", totals_count.file_matches, totals_count.max_file_matches);
-        println!("Directory matches: {0}/{1}", totals_count.dir_matches, totals_count.max_dir_matches);
-        println!("Soft link matches: {0}/{1}", totals_count.softlink_matches, totals_count.max_softlink_matches);
-    }
-    /* }}} */
-}
-
-
-/// Takes a `Result` possibly containing a `Vec` of `FullFileComparison`s and returns a `Result`
-/// either containing a boolean representing whether or not the file comparison list received as
-/// input contains any mismatches or an empty `Err` indicating that the provided `Result` file
-/// comparison list had an error.
-///
-/// #### Parameters:
-/// * `directory_tree_comparison` a `Result` possibly containing a `Vec` of `FullFileComparison`s.
-///     Typically, this parameter is the result of a call to `compare_directory_trees()`.
+/// * `directory_tree_comparison` a `Vec` of `FullFileComparison`s. Typically, this parameter is
+///     the unwrapped result of a call to `compare_directory_trees()`.
 /// #### Return:
-/// * a `Result<bool, ()>` that represents whether this function was able to successfully evaluate
-///     its input. If the input itself did not have an error, then the return value will contain a
-///     boolean that will be `true` if there were any mismatches in the directory tree comparison
-///     and `false` if the comparison found the two directory trees to be identical.
+/// * a `bool` that will be `true` if there WERE any mismatches in the directory tree comparison
+///     and `false` if the directory tree comparison found the two directory trees to be identical.
 fn directory_tree_comparison_contains_mismatch(
-    directory_tree_comparison: &Result<Vec<FullFileComparison>, ()>) -> Result<bool, ()> {
+    directory_tree_comparison: &Vec<FullFileComparison>) -> Result<bool, ()> {
     /* {{{ */
 
-    /* Go through the directory tree comparison result */
-    match directory_tree_comparison {
-        Ok(list) => {
-            /* For every comparison in the list... */
-            for e in list {
-                /* If the comparison found a mismatch of any kind between the two files, return
-                * early */
-                match e.partial_cmp.file_cmp {
-                    FileCmp::Match => (),
-                    _ => return Ok(true),
-                }
-            }
-            /* If we make it here, that means no mismatches of any kind were found in the file
-            * comparison list. */
-            return Ok(false);
-        },
-        Err(_) => {
-            return Err(());
+    /* For every comparison in the list... */
+    for e in directory_tree_comparison {
+        /* If the comparison found a mismatch of any kind between the two files, return
+        * early */
+        match e.partial_cmp.file_cmp {
+            FileCmp::Match => (),
+            _ => return Ok(true),
         }
-    };
+    }
+    /* If we make it here, that means no mismatches of any kind were found in the file
+    * comparison list. */
+    return Ok(false);
     /* }}} */
 }
 
@@ -1060,13 +682,26 @@ pub fn cmp_tree(config: &Config, first_dir: &Path, second_dir: &Path) -> i32 {
     /* {{{ */
     /* Perform the comparison between the two directory trees */
     let directory_tree_comparison_res = compare_directory_trees(&config, first_dir, second_dir);
+    if let Err(_) = directory_tree_comparison_res {
+        println!("ERROR: Failed to compare the directory trees");
+        return 2;
+    }
+
+    /* If we make it to this point, this means our directory tree comparison succeeded. Unwrap
+     * safely */
+    let directory_tree_comparison = directory_tree_comparison_res.unwrap();
+
     /* Check if any mismatches occurred (this is needed to determine the exit code of this program
     * */
     let mismatch_occurred =
-        directory_tree_comparison_contains_mismatch(&directory_tree_comparison_res);
+        directory_tree_comparison_contains_mismatch(&directory_tree_comparison);
     /* Print the appropriate output, provided silent mode is off */
     if !config.silent {
-        print_output(&config, directory_tree_comparison_res);
+        printing::print_output(&config, &directory_tree_comparison);
+    }
+    if config.totals {
+        let totals_count = Totals::calculate_from(&directory_tree_comparison);
+        printing::print_totals(&totals_count);
     }
 
     /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no

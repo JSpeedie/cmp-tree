@@ -4,6 +4,10 @@ use std::process::exit; // For exiting with an exit code on failure. Not idiomat
 
 
 // This file depends heavily on the contents of lib.rs, which is imported implicitly
+// ??
+
+// Use statements to get rid of the `cmp_tree::` prefix (keeping the `config::` prefix!)
+use cmp_tree::config;
 
 
 fn main() {
@@ -71,7 +75,7 @@ fn main() {
     }
 
     /* Instantiate a default config */
-    let mut conf = cmp_tree::default_config();
+    let mut conf = config::default_config();
 
     /* Modify the config as the commandline flags/argument require */
     if match_result.get_flag("matches") { conf.matches = true; }
