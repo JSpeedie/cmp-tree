@@ -64,7 +64,7 @@ fn relative_files_in_tree(root: &Path, extension: &Path) -> Vec<PathBuf> {
                                 let subdir_rel_paths = relative_files_in_tree(root,
                                     &extension.join(entry.file_name()));
                                 /* Append all the relative paths from the sub dir to our return
-                                * list */
+                                 * list */
                                 ret.extend(subdir_rel_paths);
                             }
                         } else {
@@ -154,7 +154,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCm
                         return Ok(FileCmp::SubstanceRegFileContentMismatch);
                     }
                     /* If both reads read 0 bytes, that means we have hit the end of both files and
-                    * the two files are identical */
+                     * the two files are identical */
                     if first_bytes_read == 0 && second_bytes_read == 0 {
                         return Ok(FileCmp::Match);
                     }
@@ -339,7 +339,7 @@ fn compare_files_compare_substance(first_path: &Path, representative_filetype: S
     /* {{{ */
 
     /* TODO: The substance of directories are currently evaluated as being a match simply if both
-    * directories exist. I'm not sure if there's anything else to evaluate with directories */
+     * directories exist. I'm not sure if there's anything else to evaluate with directories */
     match representative_filetype {
         SimpleFileType::Directory => return Ok(FileCmp::Match),
         SimpleFileType::RegFile => return compare_regular_files(first_path, second_path),
@@ -422,7 +422,7 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
     }
 
     /* INTERMEDIATE: Get the metadata of the two files. We will need this metadata for several
-    * types of comparisons coming up. */
+     * types of comparisons coming up. */
     let first_metadata: Metadata;
     let second_metadata: Metadata;
 
@@ -522,7 +522,7 @@ fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
     }
 
     /* If we make it to this point, that means all the types of comparisons have resulted in a
-    * Match. We can return return struct. */
+     * Match. We can return return struct. */
     return Ok(ret_partial_cmp);
     /* }}} */
 }
@@ -551,13 +551,13 @@ fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Pat
     /* {{{ */
 
     let mut ret: Vec<FullFileComparison> = Vec::new();
-    /* Get the first directory file list and the second directory file list:
-    * the list of files in each directory */
+    /* Get the first directory file list and the second directory file list: the list of files in
+     * each directory */
     let first_ft: Vec<PathBuf> = files_in_tree(first_root);
     let second_ft: Vec<PathBuf> = files_in_tree(second_root);
 
     /* Combine all the relative paths from the first and second directory roots into one combined
-    * list of relative paths */
+     * list of relative paths */
     let mut combined_ft: Vec<PathBuf> = Vec::new();
     combined_ft.extend(first_ft);
     combined_ft.extend(second_ft);
@@ -646,15 +646,14 @@ fn directory_tree_comparison_contains_mismatch(
 
     /* For every comparison in the list... */
     for e in directory_tree_comparison {
-        /* If the comparison found a mismatch of any kind between the two files, return
-        * early */
+        /* If the comparison found a mismatch of any kind between the two files, return early */
         match e.partial_cmp.file_cmp {
             FileCmp::Match => (),
             _ => return Ok(true),
         }
     }
-    /* If we make it here, that means no mismatches of any kind were found in the file
-    * comparison list. */
+    /* If we make it here, that means no mismatches of any kind were found in the file comparison
+     * list. */
     return Ok(false);
     /* }}} */
 }
@@ -705,9 +704,9 @@ pub fn cmp_tree(config: &Config, first_dir: &Path, second_dir: &Path) -> i32 {
     }
 
     /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
-    * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
-    * error in assessing whether there was any mismatch in the directory tree comparison, exit
-    * with exit code 2. */
+     * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
+     * error in assessing whether there was any mismatch in the directory tree comparison, exit
+     * with exit code 2. */
     match mismatch_occurred {
         Ok(true) => return 1,
         Ok(false) => return 0,
