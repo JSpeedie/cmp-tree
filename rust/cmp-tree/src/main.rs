@@ -54,22 +54,22 @@ fn main() {
     match first_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => {
-            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            println!("ERROR: the first directory tree does not exist or could not be accessed.");
             exit(2)
         },
         Err(_) => {
-            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            println!("ERROR: the first directory tree does not exist or could not be accessed.");
             exit(2)
         },
     }
     match second_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => {
-            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            println!("ERROR: the second directory tree does not exist or could not be accessed.");
             exit(2)
         },
         Err(_) => {
-            println!("ERROR: at least one of the given directory trees does not exist or could not be accessed.");
+            println!("ERROR: the second directory tree does not exist or could not be accessed.");
             exit(2)
         },
     }
