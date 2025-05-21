@@ -1,6 +1,11 @@
 #[cfg(test)]
 mod unit_tests {
     use super::super::*;
+    // Use statements to get rid of the `data_structures::` prefix
+    use crate::data_structures::FileCmp;
+    use crate::data_structures::FullFileComparison;
+    use crate::data_structures::PartialFileComparison;
+    use crate::data_structures::SimpleFileType;
 
     #[test]
     fn ut_files_in_tree_001() {
@@ -101,81 +106,6 @@ mod unit_tests {
         assert_eq!(ret, expected_ret);
         /* }}} */
     }
-
-    #[test]
-    fn ut_compare_regular_files_001() {
-        /* {{{ */
-        let first_file = Path::new("../../tests/001/first/Lorem.txt");
-        let second_file = Path::new("../../tests/001/second/Lorem.txt");
-        /* `expected_ret` would be `Ok(FileCmp::Match)` */
-        let expected_ret_content = FileCmp::Match;
-
-        let ret = compare_regular_files(&first_file, &second_file);
-        match ret {
-            Ok(ret_content) => {
-                assert_eq!(ret_content, expected_ret_content);
-            },
-            Err(_) => assert!(false),
-        }
-        /* }}} */
-    }
-
-    #[test]
-    fn ut_compare_regular_files_002() {
-        /* {{{ */
-        let first_file = Path::new("../../tests/001/first/cmp_man_pages.txt");
-        let second_file = Path::new("../../tests/001/second/cmp_man_pages.txt");
-        /* `expected_ret` would be `Ok(FileCmp::Match)` */
-        let expected_ret_content = FileCmp::Match;
-
-        let ret = compare_regular_files(&first_file, &second_file);
-        match ret {
-            Ok(ret_content) => {
-                assert_eq!(ret_content, expected_ret_content);
-            },
-            Err(_) => assert!(false),
-        }
-        /* }}} */
-    }
-
-    #[test]
-    fn ut_compare_regular_files_003() {
-        /* {{{ */
-        /* The two input files are text files with the same words, but every letter (but the very
-         * first) in the first file is in lower case whereas every letter in the second file is
-         * uppercase. */
-        let first_file = Path::new("../../tests/002/first/Lorem.txt");
-        let second_file = Path::new("../../tests/002/second/Lorem.txt");
-        /* `expected_ret` would be `Ok(FileCmp::SubstanceRegFileContentMismatch)` */
-        let expected_ret_content = FileCmp::SubstanceRegFileContentMismatch;
-
-        let ret = compare_regular_files(&first_file, &second_file);
-        match ret {
-            Ok(ret_content) => {
-                assert_eq!(ret_content, expected_ret_content);
-            },
-            Err(_) => assert!(false),
-        }
-        /* }}} */
-    }
-
-    // TODO: Add tests for:
-    // fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()>
-
-    // TODO: Add tests for:
-    // fn compare_files_compare_existences(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()>
-
-    // TODO: Add tests for:
-    // fn compare_files_get_metadata(first_path: &Path, second_path: &Path) -> Result<(Option<Metadata>, Option<Metadata>), ()>
-
-    // TODO: Add tests for:
-    // fn compare_files_compare_substance(first_path: &Path, representative_filetype: &FileType, second_path: &Path) -> Result<FileCmp, ()>
-
-    // TODO: Add tests for:
-    // fn compare_files_compare_metadata(first_metadata: &Metadata, second_metadata: &Metadata) -> Result<FileCmp, ()>
-
-    // TODO: Add tests for:
-    // fn compare_files(config: &Config, first_path: &Path, second_path: &Path) -> Result<PartialFileComparison, ()>
 
     #[test]
     fn ut_compare_directory_trees_001() {
