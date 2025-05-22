@@ -31,6 +31,9 @@ fn main() {
             Arg::new("silent").short('s').long("silent").num_args(0)
         )
         .arg(
+            Arg::new("single_threaded").short('S').long("single-threaded").num_args(0)
+        )
+        .arg(
             Arg::new("totals").short('t').long("totals").num_args(0)
         ).get_matches();
 
@@ -82,6 +85,7 @@ fn main() {
     if match_result.get_flag("date") { conf.compare_modification_times = true; }
     if match_result.get_flag("pretty") { conf.pretty = true; }
     if match_result.get_flag("silent") { conf.silent = true; }
+    if match_result.get_flag("single_threaded") { conf.single_threaded = true; }
     if match_result.get_flag("totals") { conf.totals = true; }
 
     /* Call the god function */

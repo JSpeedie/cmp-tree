@@ -6,6 +6,7 @@ pub struct Config {
     pub matches: bool,
     pub pretty: bool,
     pub silent: bool,
+    pub single_threaded: bool,
     pub totals: bool,
 }
 
@@ -21,6 +22,7 @@ pub fn default_config() -> Config {
         matches: false,
         pretty: false,
         silent: false,
+        single_threaded: false,
         totals: false,
     };
     /* }}} */

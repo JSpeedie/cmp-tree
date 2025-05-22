@@ -144,6 +144,34 @@ fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Pat
     /* We know our return array we be at most `combined_ft` length. It will only be shorter if
      * errors are encountered when comparing files */
     ret.reserve(combined_ft.len());
+
+    /* If the configuration limits the program to a single thread, perform the directory tree
+     * comparison using a single thread */
+    if config.single_threaded {
+        /* Go through all the file paths in the combined  file list, creating two full paths to the
+         * file, one rooted at `first_root`, one rooted at `second_root`, and compare them */
+        for e in &combined_ft {
+            let first_path = first_root.join(e);
+            let second_path = second_root.join(e);
+
+            let cmp_res = compare::compare_files(config, &first_path, &second_path);
+
+            if cmp_res.is_ok() {
+                ret.push(
+                    FullFileComparison {
+                        first_path: first_path,
+                        second_path: second_path,
+                        partial_cmp: cmp_res.unwrap(),
+                    }
+                );
+            }
+        }
+
+        return Ok(ret);
+    }
+
+    /* If we make it here that means the program has not been limited to a single thread */
+
     /* Find out how many cores the computer has. If we fail to get that info, default to 1 thread
      * */
     let num_threads: usize = match available_parallelism() {
