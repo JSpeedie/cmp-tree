@@ -1,28 +1,27 @@
 use std::path::{Path, PathBuf};
 use std::thread::{available_parallelism,scope,ScopedJoinHandle};
 
+// Declare `src/compare.rs` as a module
+pub mod compare;
+
 // Declare `src/config.rs` as a module
 pub mod config;
 // Re-export `Config` and `default_config()`
 // Use statements to get rid of the `config::` prefix
-pub use config::Config;
-pub use config::default_config;
+pub use config::{Config,default_config};
 
 // Declare `src/data_structures.rs` as a module
 pub mod data_structures;
 // Use statements to get rid of the `data_structures::` prefix
-use data_structures::FileCmp;
-use data_structures::FullFileComparison;
-
-// Declare `src/totals.rs` as a module
-pub mod totals;
-use totals::Totals;
+use data_structures::{FileCmp,FullFileComparison};
 
 // Declare `src/printing.rs` as a module
 pub mod printing;
 
-// Declare `src/compare.rs` as a module
-pub mod compare;
+// Declare `src/totals.rs` as a module
+pub mod totals;
+// Use statements to get rid of the `totals::` prefix
+use totals::Totals;
 
 
 /// Intended as a helper function for `files_in_tree()`. Returns an unsorted vector list of
