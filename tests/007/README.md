@@ -25,16 +25,16 @@ first                                      second
             └── c  <-- only in first --->  │
                    <-- only in second -->  └── d
                    <-- only in second -->      ├── i
-                   <-- only in second -->      │   └── 0
+                   <-- only in second -->      │   └── 1
                    <-- only in second -->      │       └── a
                    <-- only in second -->      ├── ii
-                   <-- only in second -->      │   └── 1
+                   <-- only in second -->      │   └── 2
                    <-- only in second -->      │       └── b
                    <-- only in second -->      ├── iii
-                   <-- only in second -->      │   └── 2
+                   <-- only in second -->      │   └── 3
                    <-- only in second -->      │       └── c
                    <-- only in second -->      └── iv
-                   <-- only in second -->          └── 3
+                   <-- only in second -->          └── 4
                    <-- only in second -->              └── d
 ```
 
