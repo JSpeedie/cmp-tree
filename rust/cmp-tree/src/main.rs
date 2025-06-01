@@ -4,8 +4,7 @@ use std::process::exit; // For exiting with an exit code on failure. Not idiomat
 
 
 // This file depends heavily on the contents of lib.rs, which is imported implicitly
-// ??
-
+// use ??
 // Use statements to get rid of the `cmp_tree::` prefix (keeping the `config::` prefix!)
 use cmp_tree::config;
 
@@ -41,10 +40,10 @@ fn main() {
     let second_dir_arg = match_result.get_one::<String>("second_root_dir");
 
     if first_dir_arg.is_none() {
-        println!("Expected 2 paths to 2 directories, received 0\n");
+        eprintln!("Expected 2 paths to 2 directories, received 0\n");
     }
     if second_dir_arg.is_none() {
-        println!("Expected 2 paths to 2 directories, received 1\n");
+        eprintln!("Expected 2 paths to 2 directories, received 1\n");
     }
 
     /* These unwraps are guaranteed not to fail because we checked if the result was none
@@ -57,22 +56,22 @@ fn main() {
     match first_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => {
-            println!("ERROR: the first directory tree does not exist or could not be accessed.");
+            eprintln!("ERROR: the first directory tree does not exist or could not be accessed.");
             exit(2)
         },
         Err(_) => {
-            println!("ERROR: the first directory tree does not exist or could not be accessed.");
+            eprintln!("ERROR: the first directory tree does not exist or could not be accessed.");
             exit(2)
         },
     }
     match second_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => {
-            println!("ERROR: the second directory tree does not exist or could not be accessed.");
+            eprintln!("ERROR: the second directory tree does not exist or could not be accessed.");
             exit(2)
         },
         Err(_) => {
-            println!("ERROR: the second directory tree does not exist or could not be accessed.");
+            eprintln!("ERROR: the second directory tree does not exist or could not be accessed.");
             exit(2)
         },
     }
@@ -91,4 +90,5 @@ fn main() {
     /* Call the god function */
     let exit_code: i32 = cmp_tree::cmp_tree(&conf, first_dir, second_dir);
     exit(exit_code);
+
 }

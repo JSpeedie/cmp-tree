@@ -3,13 +3,7 @@ use std::io::Read; // For getting the SHA256 hash of a file
 use std::path::Path;
 
 
-// Use statements to get rid of the `config::` prefix
-use crate::config::Config;
-
-// Use statements to get rid of the `data_structures::` prefix
-use crate::data_structures::FileCmp;
-use crate::data_structures::SimpleFileType;
-use crate::data_structures::PartialFileComparison;
+use crate::data_structures::{FileCmp,SimpleFileType};
 
 
 /// Takes two paths and returns a result representing how the files compare. Both file paths must
@@ -36,7 +30,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCm
         Ok(first_md) => match second_path.metadata() {
             Ok(second_md) => {
                 if first_md.len() != second_md.len() {
-                    return Ok(FileCmp::SubstanceRegFileContentMismatch);
+                    return Ok(FileCmp::Mismatch);
                 }
             },
             Err(_) => return Err(()),
@@ -57,7 +51,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCm
                 Ok(second_bytes_read) => {
                     /* One file ended before the other */
                     if first_bytes_read != second_bytes_read {
-                        return Ok(FileCmp::SubstanceRegFileContentMismatch);
+                        return Ok(FileCmp::Mismatch);
                     }
                     /* If both reads read 0 bytes, that means we have hit the end of both files and
                      * the two files are identical */
@@ -73,7 +67,7 @@ fn compare_regular_files(first_path: &Path, second_path: &Path) -> Result<FileCm
                      * is actually the secret sauce behind a lot of this programs speed. */
                     if first_buf != second_buf {
                     // if &first_buf[..first_bytes_read] != &second_buf[..second_bytes_read] {
-                        return Ok(FileCmp::SubstanceRegFileContentMismatch);
+                        return Ok(FileCmp::Mismatch);
                     }
                 },
                 Err(_) => {
@@ -107,7 +101,7 @@ fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, 
                     return Ok(FileCmp::Match);
                 /* If the two soft links point to a different file */
                 } else {
-                    return Ok(FileCmp::SubstanceSoftLinkLinkMismatch);
+                    return Ok(FileCmp::Mismatch);
                 }
             },
             Err(_) => {
@@ -118,112 +112,6 @@ fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, 
             return Err(());
         }
     }
-    /* }}} */
-}
-
-
-/// Takes two paths and returns a `Result` that either contains a `FileCmp` that represents how the
-/// two files (understood in the broad sense) pointed to by the two paths compare in terms of their
-/// existence or an `Err` indicating that an error occurred in the process of comparing the two
-/// files.
-///
-/// #### Parameters:
-/// * `first_path` a file path that points to the first file we wish to compare.
-/// * `second_path` a file path that points to the second file we wish to compare.
-/// #### Return:
-/// * a `FileCmp` that represents whether the two files are equivalent in terms of existence and
-///     how they are different in this regard if they are.
-fn compare_existences(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()> {
-    /* {{{ */
-    let first_existence: bool;
-    let second_existence: bool;
-
-    /* Checking existences is a little bit trickier with symlinks. First, we need to check if our
-     * paths point to symlinks and the link itself exists (rather than whether the stuff it points
-     * to exists) */
-    if first_path.is_symlink() {
-        first_existence = true;
-    } else {
-        first_existence = first_path.exists();
-    }
-    if second_path.is_symlink() {
-        second_existence = true;
-    } else {
-        second_existence = second_path.exists();
-    }
-
-    if first_existence && second_existence {
-        return Ok(FileCmp::Match);
-    /* If only one of the file paths points to an existing file, note which file exists */
-    } else if first_existence && !second_existence {
-        return Ok(FileCmp::ExistenceOnlyFirstFile);
-    } else if !first_existence && second_existence {
-        return Ok(FileCmp::ExistenceOnlySecondFile);
-    /* !first_existence && !second_existence */
-    } else {
-        return Ok(FileCmp::ExistenceNeitherFile);
-    }
-    /* }}} */
-}
-
-
-/// A helper function for `compare_files()`. Takes two paths and returns a `Result` that either
-/// contains a tuple of two `Option<Metadata>`s (representing possibly the metadata of the two
-/// files being compared) or an `Err` indicating that an error occurred in the process of acquiring
-/// the metadata.
-///
-/// #### Parameters:
-/// * `first_path` a file path that points to the first file whose metadata we wish to get.
-/// * `second_path` a file path that points to the second file whose metadata we wish to get.
-/// #### Return:
-/// * a `Result<(Option<Metadata>, Option<Metadata>), ()>` that either contains possibly the
-///     metadata of the two files or an Err indicating that this function failed to get the
-///     metadata on the two files successfully.
-fn get_metadata(first_path: &Path, second_path: &Path) ->
-    Result<(Option<Metadata>, Option<Metadata>), ()> {
-    /* {{{ */
-
-    let mut first_file_metadata: Option<Metadata> = None;
-    let mut second_file_metadata: Option<Metadata> = None;
-
-    if first_path.exists() {
-        let first_file_metadata_res;
-
-        /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks,
-         * so we need to check if the files we're looking at are symlinks and gets their metadata
-         * appropriately */
-        match first_path.is_symlink() {
-            true => first_file_metadata_res = first_path.symlink_metadata(),
-            false => first_file_metadata_res = first_path.metadata(),
-        }
-
-        if let Ok(md) = first_file_metadata_res {
-            first_file_metadata = Some(md);
-        } else {
-            return Err(());
-        }
-    }
-
-    if second_path.exists() {
-        let second_file_metadata_res;
-
-        /* Collect the metadata on the current files. By default, Path.metadata() follows symlinks,
-         * so we need to check if the files we're looking at are symlinks and gets their metadata
-         * appropriately */
-        match second_path.is_symlink() {
-            true => second_file_metadata_res = second_path.symlink_metadata(),
-            false => second_file_metadata_res = second_path.metadata(),
-        }
-
-        if let Ok(md) = second_file_metadata_res {
-            second_file_metadata = Some(md);
-        } else {
-            return Err(());
-        }
-    }
-
-
-    return Ok((first_file_metadata, second_file_metadata));
     /* }}} */
 }
 
@@ -241,7 +129,7 @@ fn get_metadata(first_path: &Path, second_path: &Path) ->
 /// #### Return:
 /// * a `FileCmp` that represents whether the two files are equivalent in terms of substance and
 ///     how they are different in this regard if they are.
-fn compare_substance(first_path: &Path, representative_filetype: SimpleFileType,
+pub fn compare_substance(representative_filetype: &SimpleFileType, first_path: &Path,
     second_path: &Path) -> Result<FileCmp, ()> {
     /* {{{ */
 
@@ -260,6 +148,9 @@ fn compare_substance(first_path: &Path, representative_filetype: SimpleFileType,
 }
 
 
+// TODO: update to describe the follow_softlinks, representative_filetype parameters
+// TODO: update to describe the Err return
+//
 /// A helper function for `compare_files()`. Takes two paths that point to two files of the same
 /// file type and returns a `Result` that either contains a `FileCmp` that represents how the two
 /// files (understood in the broad sense) compare in terms of their modification time or an `Err`
@@ -271,21 +162,66 @@ fn compare_substance(first_path: &Path, representative_filetype: SimpleFileType,
 /// #### Return:
 /// * a `FileCmp` that represents whether the two files are equivalent in terms of their
 ///     modification time.
-fn compare_modification_time(first_metadata: &Metadata,
-    second_metadata: &Metadata) -> Result<FileCmp, ()> {
+pub fn compare_modification_time(follow_softlinks: bool, representative_filetype: &SimpleFileType,
+    first_path: &Path, second_path: &Path) -> Result<FileCmp, (i32, String)> {
     /* {{{ */
 
+    /* Get the metadata of both files */
+    let first_metadata_res;
+    let second_metadata_res;
+    /* If we shouldn't follow soft links and if both files are soft links, then get the symlink
+     * metadata */
+    if !follow_softlinks && *representative_filetype == SimpleFileType::SoftLink {
+        first_metadata_res = first_path.symlink_metadata();
+    } else {
+        first_metadata_res = first_path.metadata();
+    }
+    if !follow_softlinks && *representative_filetype == SimpleFileType::SoftLink {
+        second_metadata_res = second_path.symlink_metadata();
+    } else {
+        second_metadata_res = second_path.metadata();
+    }
+    let first_metadata: Metadata;
+    let second_metadata: Metadata;
+    match first_metadata_res {
+        Ok(md) => first_metadata = md,
+        Err(_) => {
+            let err_str: String = format!("{}{}", "Failed to get metadata of file ",
+                first_path.display());
+            return Err((1, err_str));
+        }
+    }
+    match second_metadata_res {
+        Ok(md) => second_metadata = md,
+        Err(_) => {
+            let err_str: String = format!("{}{}", "Failed to get metadata of file ",
+                second_path.display());
+            return Err((1, err_str));
+        }
+    }
+
+    /* Get the modifcation time of both files */
     match first_metadata.modified() {
         Ok(first_mod_time) => match second_metadata.modified() {
             Ok(second_mod_time) => {
+                /* If the modification time of both files is not the same, return mismatch,
+                 * otherwise continue */
                 match first_mod_time == second_mod_time {
                     true => (),
-                    false => return Ok(FileCmp::MetadataModificationTimeMismatch),
+                    false => return Ok(FileCmp::Mismatch),
                 }
             },
-            Err(_) => return Err(()),
+            Err(_) => {
+                let err_str: String = format!("{}{}", "Failed to get modification time of file ",
+                    second_path.display());
+                return Err((2, err_str));
+            }
         },
-        Err(_) => return Err(()),
+        Err(_) => {
+            let err_str: String = format!("{}{}", "Failed to get modification time of file ",
+                first_path.display());
+            return Err((2, err_str));
+        }
     };
 
     return Ok(FileCmp::Match);
@@ -293,220 +229,60 @@ fn compare_modification_time(first_metadata: &Metadata,
 }
 
 
-/// Takes two paths and returns a `Result` that either contains a `PartialFileComparison` that
-/// represents how the two files (understood in the broad sense) pointed to by the two paths
-/// compare or an `Err` indicating that an error occurred in the process of comparing the two
-/// files.
-///
-/// #### Parameters:
-/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
-///     through command line arguments to the program.
-/// * `first_path` a file path that points to the first file we wish to compare.
-/// * `second_path` a file path that points to the second file we wish to compare.
-/// #### Return:
-/// * a `PartialFileComparison` that represents whether the two files are equivalent, if they
-///     differ and how they differ, as well as the two file types of the files.
-pub fn compare_files(config: &Config, first_path: &Path, second_path: &Path) ->
-    Result<PartialFileComparison, ()> {
-    /* {{{ */
-
-    let mut ret_partial_cmp: PartialFileComparison;
-
-    /* 1. Compare the existence of both files */
-    match compare_existences(first_path, second_path) {
-        Ok(existence_cmp) => {
-            ret_partial_cmp = PartialFileComparison {
-                first_ft: None,
-                second_ft: None,
-                file_cmp: existence_cmp,
-            };
-            /* If both files don't exist at this point, we can return that they experienced a
-             * mismatch. However, so long as one of them exists, we want to get the file type of
-             * that existing file. Normally we would perform an early return here if there was a
-             * mismatch, but we will delay the return until we get the file types */
-        },
-        Err(_) => return Err(()),
-    }
-
-    /* INTERMEDIATE: Get the metadata of the two files. We will need this metadata for several
-     * types of comparisons coming up. */
-    let first_metadata: Metadata;
-    let second_metadata: Metadata;
-
-    match get_metadata(first_path, second_path) {
-        /* If we were able to successfully get the metadata from both files, save the metadata
-         * and continue execution */
-        Ok((Some(first_meta), Some(second_meta))) => {
-            first_metadata = first_meta;
-            second_metadata = second_meta;
-        },
-        /* If we were only able to get the metadata for one file (which is what would happen if the
-         * existence comparison resulted in a mismatch), save the file type of the existing file
-         * and return early */
-        Ok((Some(first_meta), None)) => {
-            match SimpleFileType::try_from(&first_meta.file_type()) {
-                Ok(ft) => ret_partial_cmp.first_ft = Some(ft),
-                /* If we weren't able to get a `SimpleFileType` for the first file, return early
-                 * with an error */
-                Err(_) => return Err(()),
-            }
-            ret_partial_cmp.second_ft = None;
-            return Ok(ret_partial_cmp);
-        },
-        /* Same as previous comment */
-        Ok((None, Some(second_meta))) => {
-            ret_partial_cmp.first_ft = None;
-            match SimpleFileType::try_from(&second_meta.file_type()) {
-                Ok(ft) => ret_partial_cmp.second_ft = Some(ft),
-                /* If we weren't able to get a `SimpleFileType` for the second file, return early
-                 * with an error */
-                Err(_) => return Err(()),
-            }
-            return Ok(ret_partial_cmp);
-        },
-        /* Extremely unlikely edge case (should only get hit if something like a TOCTOU happens) */
-        Ok((None, None)) => {
-            ret_partial_cmp.first_ft = None;
-            ret_partial_cmp.second_ft = None;
-            return Ok(ret_partial_cmp);
-        },
-        Err(_) => return Err(()),
-    }
-
-    /* 2. Compare the file types of both files. */
-    let first_filetype = first_metadata.file_type();
-    let second_filetype = second_metadata.file_type();
-    /* Update the file types in our return struct now that we have them */
-    ret_partial_cmp.first_ft =
-        match SimpleFileType::try_from(&first_filetype) {
-            Ok(ft) => Some(ft),
-            Err(_) => None,
-        };
-    ret_partial_cmp.second_ft =
-        match SimpleFileType::try_from(&second_filetype) {
-            Ok(ft) => Some(ft),
-            Err(_) => None,
-        };
-    /* If the two paths point to files that are of different types (e.g. a directory vs. a symlink,
-     * a directory vs a regular file) then return early */
-    if ret_partial_cmp.first_ft != ret_partial_cmp.second_ft {
-        ret_partial_cmp.file_cmp = FileCmp::FileTypeTypeMismatch;
-        return Ok(ret_partial_cmp);
-    }
-
-    /* 3. Compare the substance of both files. */
-    /* We know the unwrap call won't fail because of the large match statement above will return
-     * early on any case where it was not able to get a `SimpleFileType` representation of both
-     * files' file types. */
-    match compare_substance(first_path, ret_partial_cmp.first_ft.clone().unwrap(),
-        second_path) {
-
-        Ok(substance_cmp) => {
-            ret_partial_cmp.file_cmp = substance_cmp;
-            /* If the two files did not have identical substance, return early */
-            match ret_partial_cmp.file_cmp {
-                FileCmp::Match => (),
-                _ => return Ok(ret_partial_cmp),
-            }
-        },
-        Err(_) => return Err(()),
-    }
-
-    /* 3. Compare the metadata of both files. */
-    /* Comparing metadata is optional, and by default is not enabled */
-    if config.compare_modification_times {
-        match compare_modification_time(&first_metadata, &second_metadata) {
-            Ok(metadata_cmp) => {
-                ret_partial_cmp.file_cmp = metadata_cmp;
-                /* If the two files did not have identical metadata, return early */
-                match ret_partial_cmp.file_cmp {
-                    FileCmp::Match => (),
-                    _ => return Ok(ret_partial_cmp),
-                }
-            },
-            Err(_) => return Err(()),
-        }
-    }
-
-    /* If we make it to this point, that means all the types of comparisons have resulted in a
-     * Match. We can return return struct. */
-    return Ok(ret_partial_cmp);
-    /* }}} */
-}
-
-
-/* Unit tests */
-#[test]
-fn ut_compare_regular_files_001() {
-    /* {{{ */
-    let first_file = Path::new("../../tests/001/first/Lorem.txt");
-    let second_file = Path::new("../../tests/001/second/Lorem.txt");
-    /* `expected_ret` would be `Ok(FileCmp::Match)` */
-    let expected_ret_content = FileCmp::Match;
-
-    let ret = compare_regular_files(&first_file, &second_file);
-    match ret {
-        Ok(ret_content) => {
-            assert_eq!(ret_content, expected_ret_content);
-        },
-        Err(_) => assert!(false),
-    }
-    /* }}} */
-}
-
-#[test]
-fn ut_compare_regular_files_002() {
-    /* {{{ */
-    let first_file = Path::new("../../tests/001/first/cmp_man_pages.txt");
-    let second_file = Path::new("../../tests/001/second/cmp_man_pages.txt");
-    /* `expected_ret` would be `Ok(FileCmp::Match)` */
-    let expected_ret_content = FileCmp::Match;
-
-    let ret = compare_regular_files(&first_file, &second_file);
-    match ret {
-        Ok(ret_content) => {
-            assert_eq!(ret_content, expected_ret_content);
-        },
-        Err(_) => assert!(false),
-    }
-    /* }}} */
-}
-
-#[test]
-fn ut_compare_regular_files_003() {
-    /* {{{ */
-    /* The two input files are text files with the same words, but every letter (but the very
-     * first) in the first file is in lower case whereas every letter in the second file is
-     * uppercase. */
-    let first_file = Path::new("../../tests/002/first/Lorem.txt");
-    let second_file = Path::new("../../tests/002/second/Lorem.txt");
-    /* `expected_ret` would be `Ok(FileCmp::SubstanceRegFileContentMismatch)` */
-    let expected_ret_content = FileCmp::SubstanceRegFileContentMismatch;
-
-    let ret = compare_regular_files(&first_file, &second_file);
-    match ret {
-        Ok(ret_content) => {
-            assert_eq!(ret_content, expected_ret_content);
-        },
-        Err(_) => assert!(false),
-    }
-    /* }}} */
-}
-
-// TODO: Add tests for:
-// fn compare_soft_links(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()>
-
-// TODO: Add tests for:
-// fn compare_files_compare_existences(first_path: &Path, second_path: &Path) -> Result<FileCmp, ()>
-
-// TODO: Add tests for:
-// fn compare_files_get_metadata(first_path: &Path, second_path: &Path) -> Result<(Option<Metadata>, Option<Metadata>), ()>
-
-// TODO: Add tests for:
-// fn compare_files_compare_substance(first_path: &Path, representative_filetype: &FileType, second_path: &Path) -> Result<FileCmp, ()>
-
-// TODO: Add tests for:
-// fn compare_files_compare_metadata(first_metadata: &Metadata, second_metadata: &Metadata) -> Result<FileCmp, ()>
-
-// TODO: Add tests for:
-// fn compare_files(config: &Config, first_path: &Path, second_path: &Path) -> Result<PartialFileComparison, ()>
+// /* Unit tests */
+// #[test]
+// fn ut_compare_regular_files_001() {
+//     /* {{{ */
+//     let first_file = Path::new("../../tests/001/first/Lorem.txt");
+//     let second_file = Path::new("../../tests/001/second/Lorem.txt");
+//     /* `expected_ret` would be `Ok(FileCmp::Match)` */
+//     let expected_ret_content = FileCmp::Match;
+// 
+//     let ret = compare_regular_files(&first_file, &second_file);
+//     match ret {
+//         Ok(ret_content) => {
+//             assert_eq!(ret_content, expected_ret_content);
+//         },
+//         Err(_) => assert!(false),
+//     }
+//     /* }}} */
+// }
+// 
+// #[test]
+// fn ut_compare_regular_files_002() {
+//     /* {{{ */
+//     let first_file = Path::new("../../tests/001/first/cmp_man_pages.txt");
+//     let second_file = Path::new("../../tests/001/second/cmp_man_pages.txt");
+//     /* `expected_ret` would be `Ok(FileCmp::Match)` */
+//     let expected_ret_content = FileCmp::Match;
+// 
+//     let ret = compare_regular_files(&first_file, &second_file);
+//     match ret {
+//         Ok(ret_content) => {
+//             assert_eq!(ret_content, expected_ret_content);
+//         },
+//         Err(_) => assert!(false),
+//     }
+//     /* }}} */
+// }
+// 
+// #[test]
+// fn ut_compare_regular_files_003() {
+//     /* {{{ */
+//     /* The two input files are text files with the same words, but every letter (but the very
+//      * first) in the first file is in lower case whereas every letter in the second file is
+//      * uppercase. */
+//     let first_file = Path::new("../../tests/002/first/Lorem.txt");
+//     let second_file = Path::new("../../tests/002/second/Lorem.txt");
+//     /* `expected_ret` would be `Ok(FileCmp::SubstanceRegFileContentMismatch)` */
+//     let expected_ret_content = FileCmp::SubstanceRegFileContentMismatch;
+// 
+//     let ret = compare_regular_files(&first_file, &second_file);
+//     match ret {
+//         Ok(ret_content) => {
+//             assert_eq!(ret_content, expected_ret_content);
+//         },
+//         Err(_) => assert!(false),
+//     }
+//     /* }}} */
+// }

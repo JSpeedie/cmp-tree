@@ -1,325 +1,419 @@
+use std::fs::DirEntry;
 use std::path::{Path, PathBuf};
-use std::thread::{available_parallelism,scope,ScopedJoinHandle};
 
-// Declare `src/compare.rs` as a module
-pub mod compare;
 
-// Declare `src/config.rs` as a module
+mod compare;
 pub mod config;
 // Re-export `Config` and `default_config()`
 // Use statements to get rid of the `config::` prefix
 pub use config::{Config,default_config};
-
-// Declare `src/data_structures.rs` as a module
-pub mod data_structures;
-// Use statements to get rid of the `data_structures::` prefix
-use data_structures::{FileCmp,FullFileComparison};
-
-// Declare `src/printing.rs` as a module
-pub mod printing;
-
-// Declare `src/totals.rs` as a module
-pub mod totals;
-// Use statements to get rid of the `totals::` prefix
-use totals::Totals;
+mod data_structures;
+use data_structures::{FileCmp,SimpleFileType};
+mod files;
 
 
-/// Intended as a helper function for `files_in_tree()`. Returns an unsorted vector list of
-/// relative file paths for all files (in the broad sense of the word, including links and
-/// directories, as well as hidden files) in a directory tree rooted at the directory pointed to by
-/// the path `root` / `extension`. The file paths included in the list will all begin with
-/// `extension`, but not `root`. This function is recursive, and it is often made use of by calling
-/// it with `root` as a path to a directory that roots a directory tree and with `extension`
-/// set to an empty ("") path.
-///
-/// #### Parameters:
-/// * `root` the beginning of the file path to the directory for which we wish to get a list of
-///      all the files in the directory tree. It will be combined with `extension` to produce the
-///      complete path.
-/// * `extension` the end of the file path to the directory for which we wish to get a list of all
-///     the files in the directory tree. It will be combined with `root` to produce the complete
-///     path. `extension` can be an empty path.
-/// #### Return:
-/// * an unsorted vector list of the relative file paths for all the files in the directory tree
-///     rooted at `root` / `extension`. The file paths included in the list will omit `root` from
-///     their path, but include `extension`.
-fn relative_files_in_tree(root: &Path, extension: &Path) -> Vec<PathBuf> {
+struct ComparisonContext<'a> {
+    pub first_root: &'a Path,
+    pub second_root: &'a Path,
+    pub extension: &'a Path,
+}
+
+
+// TODO: write doc
+// TODO: move to files.rs
+fn dir_entries_of_dir(dir_path: &Path) -> Result<Vec<DirEntry>, (i32, String)> {
     /* {{{ */
-    let full_dir_path = root.join(extension);
-    let mut ret: Vec<PathBuf> = Vec::new();
+    let mut ret: Vec<DirEntry> = Vec::new();
 
-    /* Get all the files in the dir relative to the 'root' directory */
-    match std::fs::read_dir(full_dir_path) {
+    match std::fs::read_dir(dir_path) {
         Ok(dir_entries) => {
             for e in dir_entries {
-                match e {
-                    Ok(entry) => {
-                        if let Ok(file_type) = entry.file_type() {
-                            let rel_path: PathBuf = extension.join(entry.file_name());
-                            ret.push(rel_path);
-
-                            if file_type.is_dir() {
-                                let subdir_rel_paths = relative_files_in_tree(root,
-                                    &extension.join(entry.file_name()));
-                                /* Append all the relative paths from the sub dir to our return
-                                 * list */
-                                ret.extend(subdir_rel_paths);
-                            }
-                        } else {
-                            println!("Error getting the file type of the directory
-                                entry");
-                        }
-                    },
-                    Err(_) => {
-                        println!("Error reading one of the directory entries");
-                    }
+                if let Ok(entry) = e {
+                    ret.push(entry);
+                } else {
+                    let err_str: String = format!("{}{}",
+                        "Failed to read a directory entry of directory ",
+                        dir_path.display());
+                    return Err((1, err_str));
                 }
             }
         },
+        /* If we were completely unable to read the directory */
         Err(_) => {
-            println!("Error reading contents of the directory");
+            let err_str: String = format!("{}{}",
+                "Failed to read directory ",
+                dir_path.display());
+            return Err((2, err_str));
         }
     }
-
-    return ret;
-    /* }}} */
-}
-
-
-/// Returns an unsorted vector list of relative file paths for all the files (in the broad sense of
-/// the word, including links and directories, as well as hidden files) in a directory tree rooted
-/// at the directory pointed to by `root`.
-///
-/// #### Parameters:
-/// * `root` the file path to the directory for which we wish to get a list of all the files in the
-///     directory tree.
-/// #### Return:
-/// * an unsorted vector list of the relative file paths for all the files in the directory tree
-///     rooted at `root`.
-fn files_in_tree(root: &Path) -> Vec<PathBuf> {
-    /* {{{ */
-    let extension = Path::new("");
-    return relative_files_in_tree(root, extension);
-    /* }}} */
-}
-
-
-/// Takes two paths, each pointing to directories that root directory trees and returns a `Result`
-/// that either contains a `Vec` of `FullFileComparison`s, representing a list of comparisons
-/// between all files in the directory trees, or an empty `Err`, indicating that an error occurred
-/// in the process of comparing the two directory trees.
-///
-/// #### Parameters:
-/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
-///     through command line arguments to the program.
-/// * `first_root` a file path that points to the root directory of the first directory tree we
-///     wish to compare.
-/// * `second_root` a file path that points to the root directory of the second directory tree we
-///     wish to compare.
-/// #### Return:
-/// * a `Result<Vec<FullFileComparison>, ()>` that represents whether this directory tree
-///     comparison was able to be caried out successfully or not. If the `Result` turns out to be
-///     the `Vec<FullFileComparison>`, then the caller is given a sorted list of all the file
-///     comparisons that were performed during the comparison of the two directory trees. If the
-///     `Result` turns out to be an `Err`, then this function experienced some sort of error.
-fn compare_directory_trees(config: &Config, first_root: &Path, second_root: &Path) -> 
-    Result<Vec<FullFileComparison>, ()> {
-    /* {{{ */
-
-    let mut ret: Vec<FullFileComparison> = Vec::new();
-    /* Get the first directory file list and the second directory file list: the list of files in
-     * each directory */
-    let first_ft: Vec<PathBuf> = files_in_tree(first_root);
-    let second_ft: Vec<PathBuf> = files_in_tree(second_root);
-
-    /* Combine all the relative paths from the first and second directory roots into one combined
-     * list of relative paths */
-    let mut combined_ft: Vec<PathBuf> = Vec::new();
-    combined_ft.extend(first_ft);
-    combined_ft.extend(second_ft);
-    /* Sort the combined file tree and remove duplicate items */
-    combined_ft.sort();
-    combined_ft.dedup();
-    /* We know our return array we be at most `combined_ft` length. It will only be shorter if
-     * errors are encountered when comparing files */
-    ret.reserve(combined_ft.len());
-
-    /* If the configuration limits the program to a single thread, perform the directory tree
-     * comparison using a single thread */
-    if config.single_threaded {
-        /* Go through all the file paths in the combined  file list, creating two full paths to the
-         * file, one rooted at `first_root`, one rooted at `second_root`, and compare them */
-        for e in &combined_ft {
-            let first_path = first_root.join(e);
-            let second_path = second_root.join(e);
-
-            let cmp_res = compare::compare_files(config, &first_path, &second_path);
-
-            if cmp_res.is_ok() {
-                ret.push(
-                    FullFileComparison {
-                        first_path: first_path,
-                        second_path: second_path,
-                        partial_cmp: cmp_res.unwrap(),
-                    }
-                );
-            }
-        }
-
-        return Ok(ret);
-    }
-
-    /* If we make it here that means the program has not been limited to a single thread */
-
-    /* Find out how many cores the computer has. If we fail to get that info, default to 1 thread
-     * */
-    let num_threads: usize = match available_parallelism() {
-        Ok(cores) => cores.get(),
-        _ => 1,
-    };
-    /* Calculate how many file pairs each thread needs to compare. Perform a ceiled division
-     * through manual math to make sure every element is a member of some chunk */
-    let chunk_size: usize =
-        (combined_ft.len() + num_threads - 1) / num_threads;
-
-    scope(|s| {
-        let mut thread_handles: Vec<ScopedJoinHandle<'_, Vec<FullFileComparison>>> = Vec::new();
-        thread_handles.reserve(num_threads);
-
-        for chunk in combined_ft.chunks(chunk_size) {
-            thread_handles.push(s.spawn(move || -> Vec<FullFileComparison> {
-                let mut ret_vec: Vec<FullFileComparison> = Vec::new();
-                ret_vec.reserve(chunk.len());
-
-                for file_pair in chunk {
-                    /* Go through all the file pairs assigned to this thread, creating two full
-                     * paths to the file, one rooted at `first_root`, one rooted at `second_root`,
-                     * and compare them */
-                    let first_file = first_root.join(file_pair);
-                    let second_file = second_root.join(file_pair);
-
-                    let cmp_res = compare::compare_files(config, &first_file, &second_file);
-
-                    if cmp_res.is_ok() {
-                        ret_vec.push(
-                            FullFileComparison {
-                                first_path: first_file,
-                                second_path: second_file,
-                                partial_cmp: cmp_res.unwrap(),
-                            }
-                        );
-                    }
-                }
-
-                return ret_vec;
-            }));
-        }
-        /* Join all threads in order of creation */
-        for handle in thread_handles.into_iter() {
-            match handle.join() {
-                /* If the thread succeeded, go through its `ret_vec` and copy all its contents
-                 * `ret` */
-                Ok(ret_list) => {
-                    ret.extend(ret_list);
-                },
-                _ => (),
-            }
-        }
-    });
 
     return Ok(ret);
     /* }}} */
 }
 
 
+struct FileTypeCmp {
+    pub cmp: FileCmp,
+    pub first_ft: SimpleFileType,
+    #[allow(dead_code)]
+    pub second_ft: SimpleFileType,
+}
 
 
-/// Takes a `Vec` of `FullFileComparison`s representing a directory tree comparison and returns a a
-/// boolean representing whether or not the file comparison list received as input contains any
-/// mismatches or not.
-///
-/// #### Parameters:
-/// * `directory_tree_comparison` a `Vec` of `FullFileComparison`s. Typically, this parameter is
-///     the unwrapped result of a call to `compare_directory_trees()`.
-/// #### Return:
-/// * a `bool` that will be `true` if there WERE any mismatches in the directory tree comparison
-///     and `false` if the directory tree comparison found the two directory trees to be identical.
-fn directory_tree_comparison_contains_mismatch(
-    directory_tree_comparison: &Vec<FullFileComparison>) -> Result<bool, ()> {
+// TODO: write doc
+fn compare_file_types(cc: &ComparisonContext, first_de: &DirEntry, second_de: &DirEntry)
+    -> Result<FileTypeCmp, (i32, String)> {
     /* {{{ */
 
-    /* For every comparison in the list... */
-    for e in directory_tree_comparison {
-        /* If the comparison found a mismatch of any kind between the two files, return early */
-        match e.partial_cmp.file_cmp {
-            FileCmp::Match => (),
-            _ => return Ok(true),
+    let first_ft: SimpleFileType;
+    let second_ft: SimpleFileType;
+
+    match first_de.file_type() {
+        Ok(ft) => {
+            match SimpleFileType::try_from(&ft) {
+                Ok(sft) => first_ft = sft,
+                Err(_) => {
+                    let err_str: String = format!("{}{}",
+                        "Failed to get the file type of file ",
+                        cc.first_root.join(first_de.file_name()).display());
+                    return Err((1, err_str));
+                }
+            }
+        },
+        Err(_) => {
+            let err_str: String = format!("{}{}",
+                "Failed to get the file type of file ",
+                cc.first_root.join(first_de.file_name()).display());
+            return Err((1, err_str));
         }
     }
-    /* If we make it here, that means no mismatches of any kind were found in the file comparison
-     * list. */
-    return Ok(false);
+    match second_de.file_type() {
+        Ok(ft) => {
+            match SimpleFileType::try_from(&ft) {
+                Ok(sft) => second_ft = sft,
+                Err(_) => {
+                    let err_str: String = format!("{}{}",
+                        "Failed to get the file type of file ",
+                        cc.second_root.join(second_de.file_name()).display());
+                    return Err((1, err_str));
+                }
+            }
+        },
+        Err(_) => {
+            let err_str: String = format!("{}{}",
+                "Failed to get the file type of file ",
+                cc.second_root.join(second_de.file_name()).display());
+            return Err((1, err_str));
+        }
+    }
+
+    let cmp: FileCmp;
+    if first_ft == second_ft {
+        cmp = FileCmp::Match;
+    } else {
+        cmp = FileCmp::Mismatch;
+    }
+
+    return Ok(FileTypeCmp {
+        cmp: cmp,
+        first_ft: first_ft,
+        second_ft: second_ft,
+    });
     /* }}} */
 }
 
 
-/// Takes a `Config` and two `Path`s pointing to two directory trees and compares the two directory
-/// trees, returning an `i32` representing the appropriate exit code for this program given how the
-/// execution went.
-///
-/// #### Parameters:
-/// * `config` a `Config` representing a configuration for executing `cmp-tree`, usually modified
-///     through command line arguments to the program.
-/// * `first_dir` a file path that points to the root directory of the first directory tree we
-///     wish to compare. This function assumes that this path points to a directory and that the
-///     directory exists.
-/// * `second_dir` a file path that points to the root directory of the second directory tree we
-///     wish to compare. This function assumes that this path points to a directory and that the
-///     directory exists.
-/// #### Return:
-/// * an `i32` that represents how execution of the directory tree comparison went. If there was an
-///     error during execution, 2 is returned. If the comparison proceeded without error, but
-///     mismatches between files were found, 1 is returned. If the comparison proceeeded without
-///     error and no mismatches were found, 0 is returned.
-pub fn cmp_tree(config: &Config, first_dir: &Path, second_dir: &Path) -> i32 {
+// TODO: write doc
+// TODO: break up and simplify - the function is currently 280 lines long!
+fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
     /* {{{ */
-    /* Perform the comparison between the two directory trees */
-    let directory_tree_comparison_res = compare_directory_trees(&config, first_dir, second_dir);
-    if let Err(_) = directory_tree_comparison_res {
-        println!("ERROR: Failed to compare the directory trees");
-        return 2;
+    /* Get the directory contents of both directories */
+    let mut first_dir: Vec<DirEntry>;
+    let mut second_dir: Vec<DirEntry>;
+    let mut mismatch_occurred: bool = false;
+
+    match dir_entries_of_dir(&cc.first_root.join(cc.extension)) {
+        Ok(dir_entries) => first_dir = dir_entries,
+        Err((_, err_str)) => {
+            eprintln!("{}{}", "Error: ", err_str);
+            return 2;
+        },
     }
 
-    /* If we make it to this point, this means our directory tree comparison succeeded. Unwrap
-     * safely */
-    let directory_tree_comparison = directory_tree_comparison_res.unwrap();
-
-    /* Check if any mismatches occurred (this is needed to determine the exit code of this program
-    * */
-    let mismatch_occurred =
-        directory_tree_comparison_contains_mismatch(&directory_tree_comparison);
-    /* Print the appropriate output, provided silent mode is off */
-    if !config.silent {
-        printing::print_output(&config, &directory_tree_comparison);
-    }
-    if config.totals {
-        let totals_count = Totals::calculate_from(&directory_tree_comparison);
-        printing::print_totals(&totals_count);
+    match dir_entries_of_dir(&cc.second_root.join(cc.extension)) {
+        Ok(dir_entries) => second_dir = dir_entries,
+        Err((_, err_str)) => {
+            eprintln!("{}{}", "Error: ", err_str);
+            return 2;
+        },
     }
 
-    /* If a mismatch occurred during the comparison, exit with exit code 1. If there were no
-     * mismatches, and the directory trees are identical, exit with exit code 0. If there was an
-     * error in assessing whether there was any mismatch in the directory tree comparison, exit
-     * with exit code 2. */
-    match mismatch_occurred {
-        Ok(true) => return 1,
-        Ok(false) => return 0,
-        Err(_) => return 2,
+    /* Sort the directory entries of each directory by their file name */
+    first_dir.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+    second_dir.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
+
+    let mut i: usize = 0;
+    let mut j: usize = 0;
+
+    while i < first_dir.len() && j < second_dir.len() {
+        if first_dir[i].file_name() == second_dir[j].file_name() {
+            /* Compare the file types of the two files */
+            match compare_file_types(&cc, &first_dir[i], &second_dir[j]) {
+                Ok(ft_cmp) => {
+                    if ft_cmp.cmp == FileCmp::Mismatch {
+                        eprintln!("\"{}\" has a different file type to \"{}\"",
+                            cc.first_root.join(first_dir[i].file_name()).display(),
+                            cc.second_root.join(second_dir[j].file_name()).display());
+                        mismatch_occurred = true;
+                    } else {
+                        let first_fpath: PathBuf =
+                            cc.first_root.join(cc.extension.join(first_dir[i].file_name()));
+                        let second_fpath: PathBuf =
+                            cc.second_root.join(cc.extension.join(second_dir[i].file_name()));
+                        /* If `ft_cmp.cmp == FileCmp::Match` then we are guaranteed that
+                         * `ft_cmp.first_ft == ft_cmp.second_ft` */
+                        match compare::compare_substance(&ft_cmp.first_ft, &first_fpath, &second_fpath) {
+                            Ok(FileCmp::Match) => {
+                                if config.compare_modification_times {
+                                    match compare::compare_modification_time(
+                                        config.follow_softlinks, &ft_cmp.first_ft, &first_fpath,
+                                        &second_fpath) {
+
+                                        Ok(FileCmp::Match) => {
+                                            if config.matches {
+                                                println!("[..]/{} matches in existence, file type, substance, and modification time",
+                                                    cc.extension.join(first_dir[i].file_name()).display());
+                                            }
+                                        },
+                                        Ok(FileCmp::Mismatch) => {
+                                            eprintln!("\"{}\" differs in modification time from \"{}\"",
+                                                cc.first_root.join(first_dir[i].file_name()).display(),
+                                                cc.second_root.join(second_dir[j].file_name()).display());
+                                            mismatch_occurred = true;
+                                        },
+                                        Err(_) => {
+                                            eprintln!("Error: comparing the modification time of the two files \"{}\", and \"{}\"",
+                                                cc.first_root.join(first_dir[i].file_name()).display(),
+                                                cc.second_root.join(second_dir[j].file_name()).display());
+                                            return 2;
+                                        },
+                                    }
+                                } else {
+                                    if config.matches {
+                                        println!("[..]/{} matches in existence, file type and substance",
+                                            cc.extension.join(first_dir[i].file_name()).display());
+                                    }
+                                }
+                            },
+                            Ok(FileCmp::Mismatch) => {
+                                eprintln!("\"{}\" differs in content from \"{}\"",
+                                    cc.first_root.join(first_dir[i].file_name()).display(),
+                                    cc.second_root.join(second_dir[j].file_name()).display());
+                                mismatch_occurred = true;
+                            },
+                            Err(_) => {
+                                eprintln!("Error: comparing the content of the two files \"{}\", and \"{}\"",
+                                    cc.first_root.join(first_dir[i].file_name()).display(),
+                                    cc.second_root.join(second_dir[j].file_name()).display());
+                                return 2;
+                            },
+                        }
+
+                        /* Recurse if both dir entries are directories */
+                        if ft_cmp.first_ft == SimpleFileType::Directory {
+                            /* Recurse on first_dir[i].file_name() */
+                            let new_cc = ComparisonContext {
+                                first_root: cc.first_root,
+                                second_root: cc.second_root,
+                                extension: &cc.extension.join(first_dir[i].file_name()),
+                            };
+                            let cmp_exit_code = compare_directory(config, &new_cc);
+                            if 1 == cmp_exit_code { mismatch_occurred = true; }
+                        }
+                    }
+                },
+                Err((_, err_str)) => {
+                    eprintln!("{}{}", "Error: ", err_str);
+                    return 2;
+                },
+            }
+
+            i += 1;
+            j += 1;
+        /* If the file represented by `first_dir[i]` does not exist in the second dir tree */
+        } else if first_dir[i].file_name() < second_dir[j].file_name() {
+            eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                cc.first_root.join(first_dir[i].file_name()).display(),
+                cc.second_root.join(first_dir[i].file_name()).display());
+            mismatch_occurred = true;
+            /* If first_dir[i] is a directory... */
+            let is_dir: bool;
+            match first_dir[i].file_type() {
+                Ok(ft) => is_dir = ft.is_dir(),
+                Err(_) => {
+                    eprintln!("{}{}",
+                        "Error: Failed to get the file type of file ",
+                        cc.first_root.join(first_dir[i].file_name()).display());
+                    return 2;
+                }
+            }
+            if is_dir {
+                /* Recurse on the lonely directory so we can print all the files that are missing
+                 * */
+                match files::relative_files_in_tree(&cc.first_root.join(cc.extension),
+                    Path::new(&first_dir[i].file_name())) {
+
+                    Ok(file_list) => {
+                        for f in file_list {
+                            let first_fpath = cc.first_root.join(&f);
+                            let second_fpath = cc.second_root.join(&f);
+
+                            eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                                first_fpath.display(), second_fpath.display());
+                        }
+                    },
+                    Err((_, err_str)) => {
+                        eprintln!("Error: {}", err_str);
+                    }
+                }
+            }
+            i += 1;
+        /* If the file represented by `second_dir[j]` does not exist in the first dir tree */
+        /* first_dir[i].file_name() > second_dir[j].file_name() */
+        } else {
+            eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                cc.second_root.join(second_dir[j].file_name()).display(),
+                cc.first_root.join(second_dir[j].file_name()).display());
+            mismatch_occurred = true;
+            /* If first_dir[i] is a directory... */
+            let is_dir: bool;
+            match first_dir[i].file_type() {
+                Ok(ft) => is_dir = ft.is_dir(),
+                Err(_) => {
+                    eprintln!("{}{}",
+                        "Error: Failed to get the file type of file ",
+                        cc.first_root.join(first_dir[i].file_name()).display());
+                    return 2;
+                }
+            }
+            if is_dir {
+                /* Recurse on the lonely directory so we can print all the files that are missing
+                 * */
+                match files::relative_files_in_tree(&cc.second_root.join(cc.extension),
+                    Path::new(&second_dir[j].file_name())) {
+
+                    Ok(file_list) => {
+                        for f in file_list {
+                            let first_fpath = cc.first_root.join(&f);
+                            let second_fpath = cc.second_root.join(&f);
+
+                            eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                                second_fpath.display(), first_fpath.display());
+                        }
+                    },
+                    Err((_, err_str)) => {
+                        eprintln!("Error: {}", err_str);
+                    }
+                }
+            }
+            j += 1;
+        }
+    }
+
+    while i < first_dir.len() {
+        eprintln!("\"{}\" exists, but \"{}\" does NOT",
+            cc.first_root.join(first_dir[i].file_name()).display(),
+            cc.second_root.join(first_dir[i].file_name()).display());
+        mismatch_occurred = true;
+        /* If first_dir[i] is a directory... */
+        let is_dir: bool;
+        match first_dir[i].file_type() {
+            Ok(ft) => is_dir = ft.is_dir(),
+            Err(_) => {
+                eprintln!("{}{}",
+                    "Error: Failed to get the file type of file ",
+                    cc.first_root.join(first_dir[i].file_name()).display());
+                return 2;
+            }
+        }
+        if is_dir {
+            /* Recurse on the lonely directory so we can print all the files that are missing */
+            match files::relative_files_in_tree(&cc.first_root.join(cc.extension),
+                Path::new(&first_dir[i].file_name())) {
+
+                Ok(file_list) => {
+                    for f in file_list {
+                        let first_fpath = cc.first_root.join(&f);
+                        let second_fpath = cc.second_root.join(&f);
+
+                        eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                            first_fpath.display(), second_fpath.display());
+                    }
+                },
+                Err((_, err_str)) => {
+                    eprintln!("Error: {}", err_str);
+                }
+            }
+        }
+        i += 1;
+    }
+
+    while j < second_dir.len() {
+        eprintln!("\"{}\" exists, but \"{}\" does NOT",
+            cc.second_root.join(second_dir[j].file_name()).display(),
+            cc.first_root.join(second_dir[j].file_name()).display());
+        mismatch_occurred = true;
+        /* If second_dir[j] is a directory... */
+        let is_dir: bool;
+        match second_dir[j].file_type() {
+            Ok(ft) => is_dir = ft.is_dir(),
+            Err(_) => {
+                eprintln!("{}{}",
+                    "Error: Failed to get the file type of file ",
+                    cc.first_root.join(first_dir[i].file_name()).display());
+                return 2;
+            }
+        }
+        if is_dir {
+            /* Recurse on the lonely directory so we can print all the files that are missing */
+            match files::relative_files_in_tree(&cc.second_root.join(cc.extension),
+                Path::new(&second_dir[j].file_name())) {
+
+                Ok(file_list) => {
+                    for f in file_list {
+                        let first_fpath = cc.first_root.join(&f);
+                        let second_fpath = cc.second_root.join(&f);
+
+                        eprintln!("\"{}\" exists, but \"{}\" does NOT",
+                            second_fpath.display(), first_fpath.display());
+                    }
+                },
+                Err((_, err_str)) => {
+                    eprintln!("Error: {}", err_str);
+                }
+            }
+        }
+        j += 1;
+    }
+
+    if mismatch_occurred {
+        return 1;
+    } else {
+        return 0;
     }
     /* }}} */
 }
 
 
-/* Unit tests */
-#[cfg(test)]
-mod unit_tests;
+// TODO: write doc
+pub fn cmp_tree(config: &Config, first_root: &Path, second_root: &Path) -> i32 {
+    /* {{{ */
+    let cc = ComparisonContext {
+        first_root: first_root,
+        second_root: second_root,
+        extension: Path::new(""),
+    };
+
+    return compare_directory(config, &cc);
+    /* }}} */
+}

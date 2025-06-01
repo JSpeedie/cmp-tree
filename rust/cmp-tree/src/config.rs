@@ -3,6 +3,7 @@
  * they work or run. */
 pub struct Config {
     pub compare_modification_times: bool,
+    pub follow_softlinks: bool,
     pub matches: bool,
     pub pretty: bool,
     pub silent: bool,
@@ -19,6 +20,7 @@ pub fn default_config() -> Config {
     /* {{{ */
     return Config {
         compare_modification_times: false,
+        follow_softlinks: false,
         matches: false,
         pretty: false,
         silent: false,
