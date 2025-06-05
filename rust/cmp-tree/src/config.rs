@@ -7,8 +7,9 @@ pub struct Config {
     pub matches: bool,
     pub pretty: bool,
     pub silent: bool,
-    pub single_threaded: bool,
+    pub multithread: bool,
     pub totals: bool,
+    pub shallow_pass: bool,
 }
 
 
@@ -24,8 +25,9 @@ pub fn default_config() -> Config {
         matches: false,
         pretty: false,
         silent: false,
-        single_threaded: false,
+        multithread: false,
         totals: false,
+        shallow_pass: false,
     };
     /* }}} */
 }

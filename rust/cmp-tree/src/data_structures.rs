@@ -1,6 +1,4 @@
-use std::fs::DirEntry;
 use std::fs::FileType;
-use std::path::PathBuf;
 
 
 #[derive(Debug,PartialEq,Eq)]
@@ -39,10 +37,4 @@ impl SimpleFileType {
         }
     }
     /* }}} */
-}
-
-
-pub struct SimpleFile {
-    pub f_name: PathBuf,
-    pub d_entry: DirEntry,
 }
