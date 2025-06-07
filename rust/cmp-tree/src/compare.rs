@@ -6,6 +6,7 @@ use std::path::{Path,PathBuf};
 use crate::config::Config;
 use crate::data_structures::{FileCmp,SimpleFileType};
 use crate::files;
+use crate::printing;
 
 
 /* Used to represent an ongoing `cmp-tree` comparison */
@@ -536,9 +537,9 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
             match compare_file_types(&cc, &first_dir[i], &second_dir[j]) {
                 Ok(ft_cmp) => {
                     if ft_cmp.cmp == FileCmp::Mismatch {
-                        eprintln!("\"{}\" has a different file type to \"{}\"",
-                            cc.first_root.join(first_dir[i].file_name()).display(),
-                            cc.second_root.join(second_dir[j].file_name()).display());
+                        printing::print_file_types_mismatch(config,
+                            &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
+                            &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
                         mismatch_occurred = true;
                     } else {
                         let first_fpath: PathBuf =
@@ -561,36 +562,36 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
                                             }
                                         },
                                         Ok(FileCmp::Mismatch) => {
-                                            eprintln!("\"{}\" differs in modification time from \"{}\"",
-                                                cc.first_root.join(first_dir[i].file_name()).display(),
-                                                cc.second_root.join(second_dir[j].file_name()).display());
+                                            printing::print_files_differ_in_mtime(config,
+                                                &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
+                                                &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
                                             mismatch_occurred = true;
                                         },
                                         Err((_, err_str)) => {
                                             eprintln!("Error: comparing the modification time of the two files \"{}\", and \"{}\"",
-                                                cc.first_root.join(first_dir[i].file_name()).display(),
-                                                cc.second_root.join(second_dir[j].file_name()).display());
+                                                cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
+                                                cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
                                             eprintln!("{}{}", "Error: ", err_str);
                                             return 2;
                                         },
                                     }
                                 } else {
                                     if config.matches {
-                                        println!("[..]/{} matches in existence, file type and substance",
+                                        println!("[...]/{} matches in existence, file type and substance",
                                             cc.extension.join(first_dir[i].file_name()).display());
                                     }
                                 }
                             },
                             Ok(FileCmp::Mismatch) => {
                                 eprintln!("\"{}\" differs in content from \"{}\"",
-                                    cc.first_root.join(first_dir[i].file_name()).display(),
-                                    cc.second_root.join(second_dir[j].file_name()).display());
+                                    cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
+                                    cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
                                 mismatch_occurred = true;
                             },
                             Err((_, err_str)) => {
                                 eprintln!("Error: comparing the content of the two files \"{}\", and \"{}\"",
-                                    cc.first_root.join(first_dir[i].file_name()).display(),
-                                    cc.second_root.join(second_dir[j].file_name()).display());
+                                    cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
+                                    cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
                                 eprintln!("{}{}", "Error: ", err_str);
                                 return 2;
                             },
@@ -619,9 +620,9 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
             j += 1;
         /* If the file represented by `first_dir[i]` does not exist in the second dir tree */
         } else if first_dir[i].file_name() < second_dir[j].file_name() {
-            eprintln!("\"{}\" exists, but \"{}\" does NOT",
-                cc.first_root.join(first_dir[i].file_name()).display(),
-                cc.second_root.join(first_dir[i].file_name()).display());
+            printing::print_second_file_does_not_exist(config,
+                &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
+                &cc.second_root.join(cc.extension.join(first_dir[i].file_name())));
 
             mismatch_occurred = true;
 
@@ -636,9 +637,9 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         /* If the file represented by `second_dir[j]` does not exist in the first dir tree */
         /* first_dir[i].file_name() > second_dir[j].file_name() */
         } else {
-            eprintln!("\"{}\" exists, but \"{}\" does NOT",
-                cc.second_root.join(second_dir[j].file_name()).display(),
-                cc.first_root.join(second_dir[j].file_name()).display());
+            printing::print_first_file_does_not_exist(config,
+                &cc.first_root.join(cc.extension.join(second_dir[j].file_name())),
+                &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
 
             mismatch_occurred = true;
 
@@ -653,10 +654,11 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         }
     }
 
+    /* Go through the rest of the files in `first_dir` that were not present in `second_dir` */
     while i < first_dir.len() {
-        eprintln!("\"{}\" exists, but \"{}\" does NOT",
-            cc.first_root.join(first_dir[i].file_name()).display(),
-            cc.second_root.join(first_dir[i].file_name()).display());
+        printing::print_second_file_does_not_exist(config,
+            &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
+            &cc.second_root.join(cc.extension.join(first_dir[i].file_name())));
 
         mismatch_occurred = true;
 
@@ -670,10 +672,11 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         i += 1;
     }
 
+    /* Go through the rest of the files in `second_dir` that were not present in `first_dir` */
     while j < second_dir.len() {
-        eprintln!("\"{}\" does NOT exist, but \"{}\" does",
-            cc.first_root.join(second_dir[j].file_name()).display(),
-            cc.second_root.join(second_dir[j].file_name()).display());
+        printing::print_first_file_does_not_exist(config,
+            &cc.first_root.join(cc.extension.join(second_dir[j].file_name())),
+            &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
 
         mismatch_occurred = true;
 

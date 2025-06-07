@@ -15,6 +15,7 @@ pub use config::{Config,default_config};
 mod data_structures;
 // Declare `src/files.rs` as a module
 mod files;
+mod printing;
 
 
 /// Takes a `Config` and two `Path`s pointing to two directories and compares the two directory
