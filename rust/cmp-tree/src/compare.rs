@@ -1,5 +1,7 @@
+use libc::{posix_fadvise,POSIX_FADV_SEQUENTIAL};
 use std::fs::{DirEntry,File,Metadata,read_link};
-use std::io::Read;
+use std::io::{Read,BufReader};
+use std::os::unix::io::AsRawFd;
 use std::path::{Path,PathBuf};
 
 
@@ -82,28 +84,41 @@ fn compare_regular_files(config: &Config, first_path: &Path, second_path: &Path)
     const BYTE_COUNT: usize = 8192;
     let first_file_res = File::open(first_path);
     let second_file_res = File::open(second_path);
-    let mut first_file: File;
-    let mut second_file: File;
+    let mut first_reader: BufReader<File>;
+    let mut second_reader: BufReader<File>;
+    let first_file: File;
+    let second_file: File;
     let mut first_buf = [0; BYTE_COUNT];
     let mut second_buf = [0; BYTE_COUNT];
 
     if first_file_res.is_ok() {
         first_file = first_file_res.unwrap();
+        let fd = first_file.as_raw_fd();
+        unsafe {
+            posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+        }
+        first_reader = BufReader::with_capacity(BYTE_COUNT * 2, first_file);
     } else {
         let err_str: String = format!("{}{}", "Failed to open a file for reading ",
             first_path.display());
         return Err((2, err_str));
     }
-    if second_file_res.is_ok() { second_file = second_file_res.unwrap(); }
-    else {
+    if second_file_res.is_ok() {
+        second_file = second_file_res.unwrap();
+        let fd = second_file.as_raw_fd();
+        unsafe {
+            posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+        }
+        second_reader = BufReader::with_capacity(BYTE_COUNT * 2, second_file);
+    } else {
         let err_str: String = format!("{}{}", "Failed to open a file for reading ",
             second_path.display());
         return Err((2, err_str));
     }
 
     loop {
-        match first_file.read(&mut first_buf) {
-            Ok(first_bytes_read) => match second_file.read(&mut second_buf) {
+        match first_reader.read(&mut first_buf) {
+            Ok(first_bytes_read) => match second_reader.read(&mut second_buf) {
                 Ok(second_bytes_read) => {
                     /* One file ended before the other */
                     if first_bytes_read != second_bytes_read {
