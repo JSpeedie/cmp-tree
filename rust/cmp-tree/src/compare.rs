@@ -560,7 +560,7 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
                         let first_fpath: PathBuf =
                             cc.first_root.join(cc.extension.join(first_dir[i].file_name()));
                         let second_fpath: PathBuf =
-                            cc.second_root.join(cc.extension.join(second_dir[i].file_name()));
+                            cc.second_root.join(cc.extension.join(second_dir[j].file_name()));
                         /* If `ft_cmp.cmp == FileCmp::Match` then we are guaranteed that
                          * `ft_cmp.first_ft == ft_cmp.second_ft` */
                         match compare_substance(&config, &ft_cmp.first_ft, &first_fpath, &second_fpath) {
