@@ -4,6 +4,9 @@ GLOBAL_INSTALL="/usr/local/bin/"
 LOCAL_INSTALL="/usr/local/bin/"
 MAN_INSTALL="/usr/share/man/man1/"
 
+echo "Building release version of \`cmp-tree\`..."
+cargo build --release
+
 sudo mkdir -p ${GLOBAL_INSTALL}
 # If the release build has been compiled...
 if [ -f "target/release/cmp-tree" ]; then
