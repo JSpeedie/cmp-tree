@@ -141,16 +141,17 @@ fn compare_regular_files(config: &Config, first_path: &Path, second_path: &Path)
                         return Ok(FileCmp::Mismatch);
                     }
                 },
-                Err(_) => {
-                    let err_str: String = format!("{}{}",
-                        "Encountered an error when reading a file ",
-                        second_path.display());
+                Err(e) => {
+                    let err_str: String = format!(
+                        "Encountered an error when reading the file \"{}\": {}",
+                        second_path.display(), e);
                     return Err((3, err_str));
                 }
             },
-            Err(_) => {
-                let err_str: String = format!("{}{}", "Encountered an error when reading a file ",
-                    first_path.display());
+            Err(e) => {
+                let err_str: String = format!(
+                    "Encountered an error when reading the file \"{}\": {}",
+                    first_path.display(), e);
                 return Err((3, err_str));
             }
         }
