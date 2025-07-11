@@ -471,8 +471,8 @@ fn compare_directory_missing_file(config: &Config, cc: &ComparisonContext,
 
             Ok(file_list) => {
                 for f in file_list {
-                    let first_fpath = cc.first_root.join(&f);
-                    let second_fpath = cc.second_root.join(&f);
+                    let first_fpath = cc.first_root.join(cc.extension.join(&f));
+                    let second_fpath = cc.second_root.join(cc.extension.join(&f));
 
                     /* Only print about the missing file if silent mode is not on */
                     if !config.silent {
@@ -524,7 +524,10 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
     let mut second_dir: Vec<DirEntry>;
     let mut mismatch_occurred: bool = false;
 
-    match files::dir_entries_of_dir(&cc.first_root.join(cc.extension)) {
+    let first_root_plus_ext = cc.first_root.join(cc.extension);
+    let second_root_plus_ext = cc.second_root.join(cc.extension);
+
+    match files::dir_entries_of_dir(&first_root_plus_ext) {
         Ok(dir_entries) => first_dir = dir_entries,
         Err((_, err_str)) => {
             eprintln!("{}{}", "Error: ", err_str);
@@ -532,7 +535,7 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         },
     }
 
-    match files::dir_entries_of_dir(&cc.second_root.join(cc.extension)) {
+    match files::dir_entries_of_dir(&second_root_plus_ext) {
         Ok(dir_entries) => second_dir = dir_entries,
         Err((_, err_str)) => {
             eprintln!("{}{}", "Error: ", err_str);
@@ -554,14 +557,14 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
                 Ok(ft_cmp) => {
                     if ft_cmp.cmp == FileCmp::Mismatch {
                         printing::print_file_types_mismatch(config,
-                            &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
-                            &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
+                            &first_root_plus_ext.join(first_dir[i].file_name()),
+                            &second_root_plus_ext.join(second_dir[j].file_name()));
                         mismatch_occurred = true;
                     } else {
                         let first_fpath: PathBuf =
-                            cc.first_root.join(cc.extension.join(first_dir[i].file_name()));
+                            first_root_plus_ext.join(first_dir[i].file_name());
                         let second_fpath: PathBuf =
-                            cc.second_root.join(cc.extension.join(second_dir[j].file_name()));
+                            second_root_plus_ext.join(second_dir[j].file_name());
                         /* If `ft_cmp.cmp == FileCmp::Match` then we are guaranteed that
                          * `ft_cmp.first_ft == ft_cmp.second_ft` */
                         match compare_substance(&config, &ft_cmp.first_ft, &first_fpath, &second_fpath) {
@@ -579,14 +582,14 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
                                         },
                                         Ok(FileCmp::Mismatch) => {
                                             printing::print_files_differ_in_mtime(config,
-                                                &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
-                                                &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
+                                                &first_root_plus_ext.join(first_dir[i].file_name()),
+                                                &second_root_plus_ext.join(second_dir[j].file_name()));
                                             mismatch_occurred = true;
                                         },
                                         Err((_, err_str)) => {
                                             eprintln!("Error: comparing the modification time of the two files \"{}\", and \"{}\"",
-                                                cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
-                                                cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
+                                                first_root_plus_ext.join(first_dir[i].file_name()).display(),
+                                                second_root_plus_ext.join(second_dir[j].file_name()).display());
                                             eprintln!("{}{}", "Error: ", err_str);
                                             return 2;
                                         },
@@ -600,14 +603,14 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
                             },
                             Ok(FileCmp::Mismatch) => {
                                 eprintln!("\"{}\" differs in content from \"{}\"",
-                                    cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
-                                    cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
+                                    first_root_plus_ext.join(first_dir[i].file_name()).display(),
+                                    second_root_plus_ext.join(second_dir[j].file_name()).display());
                                 mismatch_occurred = true;
                             },
                             Err((_, err_str)) => {
                                 eprintln!("Error: comparing the content of the two files \"{}\", and \"{}\"",
-                                    cc.first_root.join(cc.extension.join(first_dir[i].file_name())).display(),
-                                    cc.second_root.join(cc.extension.join(second_dir[j].file_name())).display());
+                                    first_root_plus_ext.join(first_dir[i].file_name()).display(),
+                                    second_root_plus_ext.join(second_dir[j].file_name()).display());
                                 eprintln!("{}{}", "Error: ", err_str);
                                 return 2;
                             },
@@ -637,8 +640,8 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         /* If the file represented by `first_dir[i]` does not exist in the second dir tree */
         } else if first_dir[i].file_name() < second_dir[j].file_name() {
             printing::print_second_file_does_not_exist(config,
-                &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
-                &cc.second_root.join(cc.extension.join(first_dir[i].file_name())));
+                &first_root_plus_ext.join(first_dir[i].file_name()),
+                &second_root_plus_ext.join(first_dir[i].file_name()));
 
             mismatch_occurred = true;
 
@@ -654,8 +657,8 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
         /* first_dir[i].file_name() > second_dir[j].file_name() */
         } else {
             printing::print_first_file_does_not_exist(config,
-                &cc.first_root.join(cc.extension.join(second_dir[j].file_name())),
-                &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
+                &first_root_plus_ext.join(second_dir[j].file_name()),
+                &second_root_plus_ext.join(second_dir[j].file_name()));
 
             mismatch_occurred = true;
 
@@ -673,8 +676,8 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
     /* Go through the rest of the files in `first_dir` that were not present in `second_dir` */
     while i < first_dir.len() {
         printing::print_second_file_does_not_exist(config,
-            &cc.first_root.join(cc.extension.join(first_dir[i].file_name())),
-            &cc.second_root.join(cc.extension.join(first_dir[i].file_name())));
+            &first_root_plus_ext.join(first_dir[i].file_name()),
+            &second_root_plus_ext.join(first_dir[i].file_name()));
 
         mismatch_occurred = true;
 
@@ -691,8 +694,8 @@ pub fn compare_directory(config: &Config, cc: &ComparisonContext) -> i32 {
     /* Go through the rest of the files in `second_dir` that were not present in `first_dir` */
     while j < second_dir.len() {
         printing::print_first_file_does_not_exist(config,
-            &cc.first_root.join(cc.extension.join(second_dir[j].file_name())),
-            &cc.second_root.join(cc.extension.join(second_dir[j].file_name())));
+            &first_root_plus_ext.join(second_dir[j].file_name()),
+            &second_root_plus_ext.join(second_dir[j].file_name()));
 
         mismatch_occurred = true;
 
